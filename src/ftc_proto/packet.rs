@@ -1,0 +1,83 @@
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+
+use super::traits::{Readable, Writeable};
+
+/// Base structure of all packets
+pub struct Packet {
+    pub packet_type: PacketType,
+    /// Is there for most packets, expect for Heartbeat
+    pub sequence_number: Option<i16>,
+    pub data: Vec<u8>,
+}
+
+impl Writeable for Packet {
+    fn write_to(&self, buffer: &mut Vec<u8>) {
+        self.packet_type.write_to(buffer);
+        (self.data.len() as i16).write_to(buffer);
+
+        if let Some(seq) = self.sequence_number {
+            seq.write_to(buffer);
+        }
+
+        buffer.append(&mut self.data.clone())
+    }
+}
+
+impl Readable for Packet {
+    fn read_from(buffer: &mut Vec<u8>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let packet_type = PacketType::read_from(buffer)?;
+        let data_length = i16::read_from(buffer)?;
+
+        let sequence_number = if packet_type != PacketType::Heartbeat {
+            Some(i16::read_from(buffer)?)
+        } else {
+            None
+        };
+
+        let data = buffer.drain(..(data_length as usize)).collect();
+
+        Some(Self {
+            packet_type,
+            sequence_number,
+            data,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, IntoPrimitive, TryFromPrimitive)]
+#[repr(u8)]
+pub enum PacketType {
+    /// Packet periodically pinging the server with one timestamp and the timezone, the server
+    /// echoes it back with two more timestamps
+    Time = 0x1,
+
+    /// Packet giving the server gamepad data
+    Gamepad = 0x2,
+
+    /// Packet used for heartbeating, sent and received every second, contains the sdk versions of
+    /// both apps
+    Heartbeat = 0x3,
+
+    /// Packet to issue commands from the robot and receive data from it
+    Command = 0x4,
+
+    /// Packet giving us opmode telemetry data
+    Telemetry = 0x5,
+}
+
+impl Writeable for PacketType {
+    fn write_to(&self, buffer: &mut Vec<u8>) {
+        let as_u8: u8 = (*self).into();
+
+        as_u8.write_to(buffer);
+    }
+}
+
+impl Readable for PacketType {
+    fn read_from(buffer: &mut Vec<u8>) -> Option<Self> {
+        u8::read_from(buffer)?.try_into().ok()
+    }
+}

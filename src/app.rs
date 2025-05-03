@@ -7,7 +7,7 @@ use ratatui::DefaultTerminal;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    ftc_dashboard::{message::Message, robot_status::RobotStatus},
+    ftc_dashboard::{message::Message, robot_status::{OpModeStatus, RobotStatus}},
     input::Gamepad,
     network::{NetworkDebugData, Sink},
     robot::Robot,
@@ -29,10 +29,10 @@ pub struct App {
     pub robot: Arc<RwLock<Option<Robot>>>,
 
     /// A Shared Sink to send messages to the robot
-    pub sink: Arc<Mutex<Sink>>,
+    //pub sink: Arc<Mutex<Sink>>,
 
     /// Network debug data
-    pub network_debug_data: Arc<RwLock<NetworkDebugData>>,
+   // pub network_debug_data: Arc<RwLock<NetworkDebugData>>,
 
     /// The main "block" the user has selected, going from the top left to the bottom right
     pub selected_block: u8,
@@ -49,25 +49,25 @@ impl App {
     /// Construct a new instance of [`App`].
     pub async fn new() -> Self {
         let robot = Arc::new(RwLock::new(Some(Robot {
-            status: None,
-            opmode_list: None,
+            status: Some(RobotStatus { enabled: true, available: true, active_op_mode: "Robot".to_string(), active_op_mode_status: OpModeStatus::Running, warning_message: "Test warning message".to_string(), error_message: String::default(), battery_voltage: 12.4 }),
+            opmode_list: Some(vec!["Robot".to_string(), "CoolerRobot".to_string(), "test".to_string()]),
             last_status_update: std::time::Instant::now(),
         })));
 
         let gamepad_one = Arc::new(RwLock::new(None));
         let gamepad_two = Arc::new(RwLock::new(None));
 
-        let (network_debug_data, sink) = crate::network::start_network_thread(
+        /*let (network_debug_data, sink) = crate::network::start_network_thread(
             "ws://192.168.43.1:8000",
             robot.clone(),
             gamepad_one.clone(),
             gamepad_two.clone(),
         )
-        .await;
+        .await;*/
 
         App {
-            sink,
-            network_debug_data,
+            //sink,
+            //network_debug_data,
             running: false,
             selected_block: 1,
             robot,
@@ -84,12 +84,12 @@ impl App {
 
         log::debug!("Sending {}", as_string);
 
-        self.sink
+        /*self.sink
             .lock()
             .await
             .send(tokio_tungstenite::tungstenite::Message::text(as_string))
             .await
-            .unwrap();
+            .unwrap();*/
     }
 
     /// Run the application's main loop.

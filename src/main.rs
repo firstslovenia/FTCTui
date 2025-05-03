@@ -5,6 +5,7 @@ use simplelog::{CombinedLogger, Config, LevelFilter, WriteLogger};
 
 pub mod app;
 pub mod ftc_dashboard;
+pub mod ftc_proto;
 pub mod input;
 pub mod network;
 pub mod renderers;
