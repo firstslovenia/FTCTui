@@ -1,7 +1,7 @@
 use super::traits::{Readable, Writeable};
 use bitflags::bitflags;
 
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, Default)]
 /// Data structure of a Gamepad packet
 ///
 /// This packet is only sent from the client to the server, about 25x per second
@@ -35,6 +35,30 @@ pub struct GamepadPacketData {
     pub touchpad_finger_1_y: f32,
     pub touchpad_finger_2_x: f32,
     pub touchpad_finger_2_y: f32,
+}
+
+impl GamepadPacketData {
+    pub fn default_for_user(user: u8) -> GamepadPacketData {
+        GamepadPacketData {
+            // Note: not sure if this is what we can do, but eh smeh bleh
+            gamepad_id: user.into(),
+            timestamp: 0,
+            left_stick_x: 0.0,
+            left_stick_y: 0.0,
+            right_stick_x: 0.0,
+            right_stick_y: 0.0,
+            left_trigger: 0.0,
+            right_trigger: 0.0,
+            button_flags: ButtonFlags::empty().bits(),
+            user,
+            legacy_type: GAMEPAD_TYPE_UNKNOWN,
+            gamepad_type: GAMEPAD_TYPE_UNKNOWN,
+            touchpad_finger_1_x: 0.0,
+            touchpad_finger_1_y: 0.0,
+            touchpad_finger_2_x: 0.0,
+            touchpad_finger_2_y: 0.0,
+        }
+    }
 }
 
 impl Writeable for GamepadPacketData {

@@ -10,6 +10,28 @@ pub struct Packet {
     pub data: Vec<u8>,
 }
 
+impl Packet {
+    /// Creates a packet from the type and data, setting the sequence number to None (as its set
+    /// later, when sending)
+    pub fn from_packet_type_and_bytes(packet_type: PacketType, data: Vec<u8>) -> Packet {
+        Packet {
+            sequence_number: None,
+            packet_type,
+            data,
+        }
+    }
+
+    /// Creates a packet from the packet type and any writable data
+    pub fn from_packet_type_and_writable(packet_type: PacketType, data: &impl Writeable) -> Packet {
+
+		  let mut data_buffer = Vec::new();
+
+		  data.write_to(&mut data_buffer);
+
+		  Self::from_packet_type_and_bytes(packet_type, data_buffer)
+    }
+}
+
 impl Writeable for Packet {
     fn write_to(&self, buffer: &mut Vec<u8>) {
         self.packet_type.write_to(buffer);

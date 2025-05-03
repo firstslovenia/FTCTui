@@ -1,17 +1,37 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::SystemTime};
 
 use color_eyre::eyre::Result;
 use futures::SinkExt;
 use gilrs::Gilrs;
+use lazy_static::lazy_static;
 use ratatui::DefaultTerminal;
-use tokio::sync::{Mutex, RwLock};
+use tokio::{
+    net::UdpSocket,
+    sync::{Mutex, RwLock},
+};
 
 use crate::{
-    ftc_dashboard::{message::Message, robot_status::{OpModeStatus, RobotStatus}},
+    ftc_dashboard::{
+        message::Message,
+        robot_status::{OpModeStatus, RobotStatus},
+    },
+    ftc_proto::{
+        packet::{Packet, PacketType},
+        robot_command::{
+            DEFAULT_OPMODE_GROUP, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
+            RobotCommandPacketData,
+        },
+        time_packet::RobotOpmodeState,
+    },
     input::Gamepad,
-    network::{NetworkDebugData, Sink},
+    network::{NetworkDebugData, send_packet},
     robot::Robot,
 };
+
+lazy_static! {
+    /// When the app launched
+    pub static ref STARTED_AT: SystemTime = SystemTime::now();
+}
 
 pub const DEBUG_BLOCK_ID: u8 = 0;
 pub const OP_MODES_BLOCK_ID: u8 = 1;
@@ -26,13 +46,13 @@ pub struct App {
     pub running: bool,
 
     /// Our shared robot data
-    pub robot: Arc<RwLock<Option<Robot>>>,
+    pub robot: Arc<RwLock<Robot>>,
 
-    /// A Shared Sink to send messages to the robot
-    //pub sink: Arc<Mutex<Sink>>,
+    /// A Shared Socket to send messages to the robot
+    pub socket: Arc<UdpSocket>,
 
     /// Network debug data
-   // pub network_debug_data: Arc<RwLock<NetworkDebugData>>,
+    pub network_debug_data: Arc<RwLock<NetworkDebugData>>,
 
     /// The main "block" the user has selected, going from the top left to the bottom right
     pub selected_block: u8,
@@ -48,26 +68,52 @@ pub struct App {
 impl App {
     /// Construct a new instance of [`App`].
     pub async fn new() -> Self {
-        let robot = Arc::new(RwLock::new(Some(Robot {
-            status: Some(RobotStatus { enabled: true, available: true, active_op_mode: "Robot".to_string(), active_op_mode_status: OpModeStatus::Running, warning_message: "Test warning message".to_string(), error_message: String::default(), battery_voltage: 12.4 }),
-            opmode_list: Some(vec!["Robot".to_string(), "CoolerRobot".to_string(), "test".to_string()]),
-            last_status_update: std::time::Instant::now(),
-        })));
+        let robot = Arc::new(RwLock::new(Robot {
+            active_opmode_state: Some(RobotOpmodeState::Running),
+            opmode_list: Some(vec![
+                OpModeData {
+                    name: OPMODE_STOP.to_string(),
+                    group: DEFAULT_OPMODE_GROUP.to_string(),
+                    flavor: OpModeFlavor::System,
+                    source: None,
+                    system_opmode_display_name: None,
+                },
+                OpModeData {
+                    name: "Robot".to_string(),
+                    group: DEFAULT_OPMODE_GROUP.to_string(),
+                    flavor: OpModeFlavor::Teleop,
+                    source: None,
+                    system_opmode_display_name: None,
+                },
+                OpModeData {
+                    name: "CoolerRobot".to_string(),
+                    group: DEFAULT_OPMODE_GROUP.to_string(),
+                    flavor: OpModeFlavor::Teleop,
+                    source: None,
+                    system_opmode_display_name: None,
+                },
+            ]),
+            active_opmode: OPMODE_STOP.to_string(),
+            error_message: None,
+            warning_message: Some(String::from("Test warning message")),
+            battery_voltage: Some(12.3),
+            last_battery_update: std::time::Instant::now(),
+        }));
 
         let gamepad_one = Arc::new(RwLock::new(None));
         let gamepad_two = Arc::new(RwLock::new(None));
 
-        /*let (network_debug_data, sink) = crate::network::start_network_thread(
-            "ws://192.168.43.1:8000",
+        let (network_debug_data, socket) = crate::network::start_network_thread(
+            "192.168.43.1:20884",
             robot.clone(),
             gamepad_one.clone(),
             gamepad_two.clone(),
         )
-        .await;*/
+        .await;
 
         App {
-            //sink,
-            //network_debug_data,
+            socket,
+            network_debug_data,
             running: false,
             selected_block: 1,
             robot,
@@ -76,20 +122,6 @@ impl App {
             gamepad_one,
             gamepad_two,
         }
-    }
-
-    /// Sends a websocket message to the robot.
-    pub async fn send_message(&self, message: Message) {
-        let as_string = serde_json::to_string(&message).unwrap();
-
-        log::debug!("Sending {}", as_string);
-
-        /*self.sink
-            .lock()
-            .await
-            .send(tokio_tungstenite::tungstenite::Message::text(as_string))
-            .await
-            .unwrap();*/
     }
 
     /// Run the application's main loop.
@@ -113,8 +145,73 @@ impl App {
         Ok(())
     }
 
+    /// Starts an opmode with the given name
+    pub async fn start_opmode(&self, opmode: String) {
+        send_packet(
+            &self.socket,
+            Packet::from_packet_type_and_writable(
+                PacketType::Command,
+                &RobotCommandPacketData {
+                    acknowledged: false,
+                    command: RUN_OPMODE.to_string(),
+                    data: opmode,
+                    timestamp: get_timestamp_nanos(),
+                },
+            ),
+        )
+        .await;
+    }
+
+    /// Inits an opmode with the given name
+    pub async fn init_opmode(&self, opmode: String) {
+        send_packet(
+            &self.socket,
+            Packet::from_packet_type_and_writable(
+                PacketType::Command,
+                &RobotCommandPacketData {
+                    acknowledged: false,
+                    command: INIT_OPMODE.to_string(),
+                    data: opmode,
+                    timestamp: get_timestamp_nanos(),
+                },
+            ),
+        )
+        .await;
+    }
+
+    /// Stops the current opmode
+    pub async fn stop_opmode(&self) {
+        send_packet(
+            &self.socket,
+            Packet::from_packet_type_and_writable(
+                PacketType::Command,
+                &RobotCommandPacketData {
+                    acknowledged: false,
+                    command: INIT_OPMODE.to_string(),
+                    data: OPMODE_STOP.to_string(),
+                    timestamp: get_timestamp_nanos(),
+                },
+            ),
+        )
+        .await;
+    }
+
     /// Set running to false to quit the application.
     pub async fn quit(&mut self) {
         self.running = false;
     }
+}
+
+/// Gets a millis timestamp of the app's uptime
+///
+/// Used for certain packets
+pub fn get_timestamp_millis() -> u64 {
+    STARTED_AT.elapsed().unwrap().as_millis() as u64
+}
+
+/// Gets a nanos timestamp of the app's uptime
+///
+/// Used for certain packets
+pub fn get_timestamp_nanos() -> u64 {
+    STARTED_AT.elapsed().unwrap().as_nanos() as u64
 }

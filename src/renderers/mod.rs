@@ -1,9 +1,7 @@
-use color_eyre::owo_colors::OwoColorize;
-use gilrs::GamepadId;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
-    style::{Style, Stylize},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Padding, Paragraph, Wrap},
 };
@@ -18,7 +16,7 @@ use crate::{
         ACTIVE_OPMODE_BLOCK_ID, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID, OP_MODES_BLOCK_ID,
         ROBOT_BLOCK_ID,
     },
-    ftc_dashboard::robot_status::OpModeStatus,
+    ftc_proto::{gamepad_packet::ButtonFlags, time_packet::RobotOpmodeState},
 };
 
 pub mod styles;
@@ -143,7 +141,9 @@ impl App {
                     Span::styled(":", Style::new().fg(MUTED_TEXT_COLOR)),
                 ]));
 
-                if state.left_stick_button {
+                let button_flags = ButtonFlags::from_bits(state.button_flags).unwrap();
+
+                if button_flags.contains(ButtonFlags::LEFT_STICK_BUTTON) {
                     gamepads_text.push(Line::from(vec![
                         Span::styled("  left stick: ", Style::new().fg(MUTED_TEXT_COLOR)),
                         Span::styled(
@@ -164,7 +164,7 @@ impl App {
                     ]));
                 }
 
-                if state.right_stick_button {
+                if button_flags.contains(ButtonFlags::RIGHT_STICK_BUTTON) {
                     gamepads_text.push(Line::from(vec![
                         Span::styled("  right stick: ", Style::new().fg(MUTED_TEXT_COLOR)),
                         Span::styled(
@@ -185,7 +185,7 @@ impl App {
                     ]));
                 }
 
-                if state.left_bumper {
+                if button_flags.contains(ButtonFlags::LEFT_BUMPER) {
                     gamepads_text.push(Line::from(vec![
                         Span::styled("  left trigger: ", Style::new().fg(MUTED_TEXT_COLOR)),
                         Span::styled(
@@ -203,7 +203,7 @@ impl App {
                     ]));
                 }
 
-                if state.right_bumper {
+                if button_flags.contains(ButtonFlags::RIGHT_BUMPER) {
                     gamepads_text.push(Line::from(vec![
                         Span::styled("  right trigger: ", Style::new().fg(MUTED_TEXT_COLOR)),
                         Span::styled(
@@ -223,16 +223,16 @@ impl App {
 
                 let mut dpad_buttons_pressed = Vec::new();
 
-                if state.dpad_up {
+                if button_flags.contains(ButtonFlags::DPAD_UP) {
                     dpad_buttons_pressed.push("up")
                 };
-                if state.dpad_left {
+                if button_flags.contains(ButtonFlags::DPAD_LEFT) {
                     dpad_buttons_pressed.push("left")
                 };
-                if state.dpad_right {
+                if button_flags.contains(ButtonFlags::DPAD_RIGHT) {
                     dpad_buttons_pressed.push("right")
                 };
-                if state.dpad_down {
+                if button_flags.contains(ButtonFlags::DPAD_DOWN) {
                     dpad_buttons_pressed.push("down")
                 };
 
@@ -252,25 +252,25 @@ impl App {
 
                 let mut general_buttons_pressed = Vec::new();
 
-                if state.a {
+                if button_flags.contains(ButtonFlags::A) {
                     general_buttons_pressed.push("a")
                 };
-                if state.b {
+                if button_flags.contains(ButtonFlags::B) {
                     general_buttons_pressed.push("b")
                 };
-                if state.x {
+                if button_flags.contains(ButtonFlags::X) {
                     general_buttons_pressed.push("x")
                 };
-                if state.y {
+                if button_flags.contains(ButtonFlags::Y) {
                     general_buttons_pressed.push("y")
                 };
-                if state.guide {
+                if button_flags.contains(ButtonFlags::GUIDE) {
                     general_buttons_pressed.push("guide")
                 };
-                if state.start {
+                if button_flags.contains(ButtonFlags::START) {
                     general_buttons_pressed.push("start")
                 };
-                if state.back {
+                if button_flags.contains(ButtonFlags::BACK) {
                     general_buttons_pressed.push("back")
                 };
 
@@ -286,13 +286,6 @@ impl App {
                         Span::styled("  buttons:", Style::new().fg(MUTED_TEXT_COLOR)),
                         Span::styled(buttons_text, Style::new().fg(TEXT_COLOR)),
                     ]));
-                }
-
-                if state.touchpad {
-                    gamepads_text.push(Line::from(Span::styled(
-                        "  touchpad",
-                        Style::new().fg(TEXT_COLOR),
-                    )));
                 }
 
                 gamepads_text.push(Line::from(""));
@@ -311,16 +304,9 @@ impl App {
     pub async fn create_robot_paragraph(&mut self) -> Paragraph {
         let mut robot_text: Vec<Line> = Vec::new();
 
-        let Some(robot) = &*self.robot.read().await else {
-            robot_text.push(Line::from(vec![Span::styled(
-                "Not connected to robot yet..",
-                Style::new().fg(MUTED_TEXT_COLOR),
-            )]));
+        let robot = self.robot.read().await;
 
-            return Paragraph::new(robot_text).wrap(Wrap { trim: false });
-        };
-
-        let Some(status) = &robot.status else {
+        let Some(status) = &robot.active_opmode_state else {
             robot_text.push(Line::from(vec![Span::styled(
                 "Waiting to receive status..",
                 Style::new().fg(MUTED_TEXT_COLOR),
@@ -332,74 +318,72 @@ impl App {
         robot_text.push(Line::from(Span::styled(
             format!(
                 "Last update was {} second(s) ago",
-                (std::time::Instant::now() - robot.last_status_update).as_secs()
+                (std::time::Instant::now() - robot.last_battery_update).as_secs()
             ),
             Style::new().fg(MUTED_TEXT_COLOR),
         )));
 
-        let voltage_color = if status.battery_voltage <= 7.5 {
-            ERROR_COLOR
-        } else if status.battery_voltage < 10.0 {
-            WARNING_COLOR
-        } else {
-            SUCCESS_COLOR
-        };
-
-        robot_text.push(Line::from(vec![
-            Span::styled("Battery voltage: ", Style::new().fg(MUTED_TEXT_COLOR)),
-            Span::styled(
-                format!("{:.1} V", status.battery_voltage),
-                Style::new().fg(voltage_color),
-            ),
-        ]));
-
-        if !status.enabled {
-            robot_text.push(Line::from(Span::styled(
-                "Not enabled",
-                Style::new().fg(WARNING_COLOR),
-            )));
-        }
-
-        if !status.available {
-            robot_text.push(Line::from(Span::styled(
-                "Not available",
-                Style::new().fg(WARNING_COLOR),
-            )));
-        }
-
-			if status.active_op_mode == "$Stop$Robot$" {
-            robot_text.push(Line::from(""));
+        if let Some(battery_voltage) = robot.battery_voltage {
+            let voltage_color = if battery_voltage <= 7.5 {
+                ERROR_COLOR
+            } else if battery_voltage < 10.0 {
+                WARNING_COLOR
+            } else {
+                SUCCESS_COLOR
+            };
 
             robot_text.push(Line::from(vec![
-                Span::styled("Robot is stopped.", Style::new().fg(TEXT_COLOR)),
+                Span::styled("Battery voltage: ", Style::new().fg(MUTED_TEXT_COLOR)),
+                Span::styled(
+                    format!("{:.2} V", battery_voltage),
+                    Style::new().fg(voltage_color),
+                ),
+            ]));
+        } else {
+            robot_text.push(Line::from(vec![
+                Span::styled("Battery voltage: ", Style::new().fg(MUTED_TEXT_COLOR)),
+                Span::styled("Unknown".to_string(), Style::new().fg(MUTED_TEXT_COLOR)),
             ]));
         }
 
-        else if !status.active_op_mode.is_empty() {
+        if robot.active_opmode == "$Stop$Robot$" {
+            robot_text.push(Line::from(""));
+
+            robot_text.push(Line::from(vec![Span::styled(
+                "Robot is stopped.",
+                Style::new().fg(TEXT_COLOR),
+            )]));
+        } else if !robot.active_opmode.is_empty() {
             robot_text.push(Line::from(""));
 
             robot_text.push(Line::from(vec![
                 Span::styled("Active OpMode: ", Style::new().fg(MUTED_TEXT_COLOR)),
-                Span::styled(status.active_op_mode.clone(), Style::new().fg(TEXT_COLOR)),
+                Span::styled(robot.active_opmode.clone(), Style::new().fg(TEXT_COLOR)),
             ]));
 
-            match status.active_op_mode_status {
-                OpModeStatus::Init => {
+            match status {
+                RobotOpmodeState::Initialized | RobotOpmodeState::NotStarted => {
                     robot_text.push(Line::from(vec![
                         Span::styled("OpMode status: ", Style::new().fg(MUTED_TEXT_COLOR)),
                         Span::styled("Initialized", Style::new().fg(PRIMARY_COLOR_LIGHTER)),
                     ]));
                 }
-                OpModeStatus::Running => {
+                RobotOpmodeState::Running => {
                     robot_text.push(Line::from(vec![
                         Span::styled("OpMode status: ", Style::new().fg(MUTED_TEXT_COLOR)),
                         Span::styled("Running", Style::new().fg(SUCCESS_COLOR)),
                     ]));
                 }
-                OpModeStatus::Stopped => {
+                RobotOpmodeState::Stopped | RobotOpmodeState::EmergencyStopped => {
                     robot_text.push(Line::from(vec![
                         Span::styled("OpMode status: ", Style::new().fg(MUTED_TEXT_COLOR)),
                         Span::styled("Stopped", Style::new().fg(WARNING_COLOR)),
+                    ]));
+                }
+                RobotOpmodeState::Unknown => {
+                    robot_text.push(Line::from(vec![
+                        Span::styled("OpMode status: ", Style::new().fg(MUTED_TEXT_COLOR)),
+                        Span::styled("Unknown", Style::new().fg(MUTED_TEXT_COLOR)),
                     ]));
                 }
             }
@@ -407,16 +391,16 @@ impl App {
 
         robot_text.push(Line::from(""));
 
-        if !status.warning_message.is_empty() {
+        if let Some(warning_message) = &robot.warning_message {
             robot_text.push(Line::from(Span::styled(
-                status.warning_message.clone(),
+                warning_message.clone(),
                 Style::new().fg(WARNING_COLOR),
             )));
         }
 
-        if !status.error_message.is_empty() {
+        if let Some(error_message) = &robot.error_message {
             robot_text.push(Line::from(Span::styled(
-                status.error_message.clone(),
+                error_message.clone(),
                 Style::new().fg(ERROR_COLOR),
             )));
         }
@@ -428,14 +412,7 @@ impl App {
     pub async fn create_opmode_list_paragraph(&mut self) -> Paragraph {
         let mut text: Vec<Line> = Vec::new();
 
-        let Some(robot) = &*self.robot.read().await else {
-            text.push(Line::from(vec![Span::styled(
-                "Not connected to robot yet..",
-                Style::new().fg(MUTED_TEXT_COLOR),
-            )]));
-
-            return Paragraph::new(text).wrap(Wrap { trim: false });
-        };
+        let robot = self.robot.read().await;
 
         let Some(opmode_list) = &robot.opmode_list else {
             text.push(Line::from(vec![Span::styled(
@@ -447,7 +424,7 @@ impl App {
         };
 
         for i in 0..opmode_list.len() {
-            let opmode_name = opmode_list[i].clone();
+            let selected_opmode = opmode_list[i].clone();
 
             let selected =
                 self.opmode_list_selected_index == i && self.selected_block == OP_MODES_BLOCK_ID;
@@ -458,17 +435,22 @@ impl App {
                 Style::new().fg(TEXT_COLOR)
             };
 
-            if let Some(status) = &robot.status {
-                if status.active_op_mode == opmode_name {
-                    match status.active_op_mode_status {
-                        OpModeStatus::Init => style = style.fg(PRIMARY_COLOR_LIGHTER),
-                        OpModeStatus::Running => style = style.fg(SUCCESS_COLOR),
-                        OpModeStatus::Stopped => style = style.fg(WARNING_COLOR),
+            if let Some(status) = &robot.active_opmode_state {
+                if robot.active_opmode == selected_opmode.name {
+                    match status {
+                        RobotOpmodeState::Initialized | RobotOpmodeState::NotStarted => {
+                            style = style.fg(PRIMARY_COLOR_LIGHTER)
+                        }
+                        RobotOpmodeState::Running => style = style.fg(SUCCESS_COLOR),
+                        RobotOpmodeState::Stopped | RobotOpmodeState::EmergencyStopped => {
+                            style = style.fg(WARNING_COLOR)
+                        }
+                        RobotOpmodeState::Unknown => style = style.fg(TEXT_COLOR),
                     }
                 }
             }
 
-            text.push(Line::from(Span::styled(opmode_name, style)));
+            text.push(Line::from(Span::styled(selected_opmode.name, style)));
         }
 
         Paragraph::new(text).wrap(Wrap { trim: false })

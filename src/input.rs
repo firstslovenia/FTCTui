@@ -1,12 +1,15 @@
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::{
-    App,
-    app::OP_MODES_BLOCK_ID,
-    ftc_dashboard::{gamepad_state::GamepadState, message::Message, robot_status::OpModeStatus},
+    app::{get_timestamp_millis, OP_MODES_BLOCK_ID}, ftc_dashboard::{gamepad_state::GamepadState, message::Message, robot_status::OpModeStatus}, ftc_proto::{
+        gamepad_packet::{ButtonFlags, GamepadPacketData, GAMEPAD_TYPE_UNKNOWN},
+        packet::{Packet, PacketType},
+        robot_command::{RobotCommandPacketData, INIT_OPMODE, OPMODE_STOP, RUN_OPMODE},
+        time_packet::RobotOpmodeState,
+    }, network::send_packet, App
 };
 
 use gilrs::{Axis, Button, GamepadId, Gilrs};
@@ -42,29 +45,25 @@ impl App {
             // Main action button
             (_, KeyCode::Enter) => match self.selected_block {
                 OP_MODES_BLOCK_ID => {
-                    if let Some(robot) = &*self.robot.read().await {
-                        if let Some(op_modes) = &robot.opmode_list {
-                            if let Some(robot_status) = &robot.status {
-                                let selected_op_mode =
-                                    op_modes[self.opmode_list_selected_index].clone();
+                    let robot = self.robot.read().await;
 
-                                if robot_status.active_op_mode == selected_op_mode {
-                                    match robot_status.active_op_mode_status {
-                                        OpModeStatus::Init | OpModeStatus::Stopped => {
-                                            self.send_message(Message::StartOpMode).await;
-                                        }
-                                        OpModeStatus::Running => {
-                                            self.send_message(Message::StopOpMode).await;
-                                        }
+                    if let Some(op_modes) = &robot.opmode_list {
+                        if let Some(robot_status) = &robot.active_opmode_state {
+                            let selected_op_mode =
+                                op_modes[self.opmode_list_selected_index].clone();
+
+                            if robot.active_opmode == selected_op_mode.name {
+                                match robot_status {
+                                    RobotOpmodeState::Initialized | RobotOpmodeState::Stopped => {
+                                        self.start_opmode(selected_op_mode.name.clone()).await;
                                     }
-                                } else {
-                                    self.send_message(Message::InitOpMode(
-                                        crate::ftc_dashboard::message::InitOpMode {
-                                            op_mode_name: selected_op_mode,
-                                        },
-                                    ))
-                                    .await;
+                                    RobotOpmodeState::Running => {
+                                        self.stop_opmode().await;
+                                    }
+                                    _ => {}
                                 }
+                            } else {
+                                self.init_opmode(selected_op_mode.name.clone()).await;
                             }
                         }
                     }
@@ -74,17 +73,20 @@ impl App {
 
             // Stop / start button
             (_, KeyCode::Char(' ')) => {
-                if let Some(robot) = &*self.robot.read().await {
-                    if let Some(robot_status) = &robot.status {
-                        if !robot_status.active_op_mode.is_empty() {
-                            match robot_status.active_op_mode_status {
-                                OpModeStatus::Init | OpModeStatus::Stopped => {
-                                    self.send_message(Message::StartOpMode).await;
-                                }
-                                OpModeStatus::Running => {
-                                    self.send_message(Message::StopOpMode).await;
-                                }
+                let robot = self.robot.read().await;
+
+                if let Some(opmode_state) = &robot.active_opmode_state {
+                    if robot.active_opmode != OPMODE_STOP {
+                        match opmode_state {
+                            RobotOpmodeState::Initialized
+                            | RobotOpmodeState::Stopped
+                            | RobotOpmodeState::NotStarted => {
+                                self.start_opmode(robot.active_opmode.clone()).await;
                             }
+                            RobotOpmodeState::Running => {
+                                self.stop_opmode().await;
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -114,10 +116,10 @@ impl App {
                     if self.opmode_list_selected_index == 0 {
                         let mut max_index = 0;
 
-                        if let Some(robot) = &*self.robot.read().await {
-                            if let Some(op_modes) = &robot.opmode_list {
-                                max_index = op_modes.len() - 1;
-                            }
+                        let robot = self.robot.read().await;
+
+                        if let Some(op_modes) = &robot.opmode_list {
+                            max_index = op_modes.len() - 1;
                         }
 
                         self.opmode_list_selected_index = max_index;
@@ -132,10 +134,10 @@ impl App {
                 OP_MODES_BLOCK_ID => {
                     let mut max_index = 0;
 
-                    if let Some(robot) = &*self.robot.read().await {
-                        if let Some(op_modes) = &robot.opmode_list {
-                            max_index = op_modes.len() - 1;
-                        }
+                    let robot = self.robot.read().await;
+
+                    if let Some(op_modes) = &robot.opmode_list {
+                        max_index = op_modes.len() - 1;
                     }
 
                     if self.opmode_list_selected_index == max_index {
@@ -178,14 +180,14 @@ impl App {
                 if gamepad_two.is_none() && gamepad_one.id != id {
                     *gamepad_two = Some(Gamepad {
                         id,
-                        last_state: Gamepad::map_to_fsdb_gamepad_state(id, &self.gilrs),
+                        last_state: Gamepad::map_to_gamepad_packet_data(id, 2, &self.gilrs),
                     });
                     continue;
                 }
             } else {
                 *gamepad_one = Some(Gamepad {
                     id,
-                    last_state: Gamepad::map_to_fsdb_gamepad_state(id, &self.gilrs),
+                    last_state: Gamepad::map_to_gamepad_packet_data(id, 1, &self.gilrs),
                 })
             }
         }
@@ -198,11 +200,11 @@ impl App {
 
         // Update our own states
         if let Some(gamepad) = &mut *gamepad_one {
-            gamepad.last_state = Gamepad::map_to_fsdb_gamepad_state(gamepad.id, &self.gilrs);
+            gamepad.last_state = Gamepad::map_to_gamepad_packet_data(gamepad.id, 1, &self.gilrs);
         }
 
         if let Some(gamepad) = &mut *gamepad_two {
-            gamepad.last_state = Gamepad::map_to_fsdb_gamepad_state(gamepad.id, &self.gilrs);
+            gamepad.last_state = Gamepad::map_to_gamepad_packet_data(gamepad.id, 2, &self.gilrs);
         }
     }
 }
@@ -210,38 +212,95 @@ impl App {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Gamepad {
     pub id: GamepadId,
-    pub last_state: GamepadState,
+    pub last_state: GamepadPacketData,
 }
 
 impl Gamepad {
-    pub fn map_to_fsdb_gamepad_state(id: GamepadId, gilrs: &Gilrs) -> GamepadState {
+    pub fn map_to_gamepad_packet_data(id: GamepadId, user: u8, gilrs: &Gilrs) -> GamepadPacketData {
         let gamepad = gilrs.gamepad(id);
 
-        GamepadState {
+        let timestamp = get_timestamp_millis();
+
+        let mut flags = ButtonFlags::empty();
+
+        if gamepad.is_pressed(Button::LeftThumb) {
+            flags = flags | ButtonFlags::LEFT_STICK_BUTTON;
+        }
+
+        if gamepad.is_pressed(Button::RightThumb) {
+            flags = flags | ButtonFlags::RIGHT_STICK_BUTTON;
+        }
+
+        if gamepad.is_pressed(Button::DPadUp) {
+            flags = flags | ButtonFlags::DPAD_UP;
+        }
+
+        if gamepad.is_pressed(Button::DPadDown) {
+            flags = flags | ButtonFlags::DPAD_DOWN;
+        }
+
+        if gamepad.is_pressed(Button::DPadLeft) {
+            flags = flags | ButtonFlags::DPAD_LEFT;
+        }
+
+        if gamepad.is_pressed(Button::DPadRight) {
+            flags = flags | ButtonFlags::DPAD_RIGHT;
+        }
+
+        if gamepad.is_pressed(Button::South) {
+            flags = flags | ButtonFlags::A;
+        }
+
+        if gamepad.is_pressed(Button::East) {
+            flags = flags | ButtonFlags::B;
+        }
+
+        if gamepad.is_pressed(Button::West) {
+            flags = flags | ButtonFlags::X;
+        }
+
+        if gamepad.is_pressed(Button::North) {
+            flags = flags | ButtonFlags::Y;
+        }
+
+        if gamepad.is_pressed(Button::Mode) {
+            flags = flags | ButtonFlags::GUIDE;
+        }
+
+        if gamepad.is_pressed(Button::Start) {
+            flags = flags | ButtonFlags::START;
+        }
+
+        if gamepad.is_pressed(Button::Select) {
+            flags = flags | ButtonFlags::BACK;
+        }
+
+        if gamepad.is_pressed(Button::LeftTrigger) {
+            flags = flags | ButtonFlags::LEFT_BUMPER;
+        }
+
+        if gamepad.is_pressed(Button::RightTrigger) {
+            flags = flags | ButtonFlags::RIGHT_BUMPER;
+        }
+
+        GamepadPacketData {
+            gamepad_id: usize::from(gamepad.id()) as i32,
             left_stick_x: gamepad.value(Axis::LeftStickX),
             left_stick_y: gamepad.value(Axis::LeftStickY),
-            left_stick_button: gamepad.is_pressed(Button::LeftThumb),
             right_stick_x: gamepad.value(Axis::RightStickX),
             right_stick_y: gamepad.value(Axis::RightStickY),
-            right_stick_button: gamepad.is_pressed(Button::RightThumb),
-            dpad_up: gamepad.is_pressed(Button::DPadUp),
-            dpad_down: gamepad.is_pressed(Button::DPadDown),
-            dpad_left: gamepad.is_pressed(Button::DPadLeft),
-            dpad_right: gamepad.is_pressed(Button::DPadRight),
-            a: gamepad.is_pressed(Button::South),
-            b: gamepad.is_pressed(Button::East),
-            x: gamepad.is_pressed(Button::West),
-            y: gamepad.is_pressed(Button::North),
-            guide: gamepad.is_pressed(Button::Mode),
-            start: gamepad.is_pressed(Button::Start),
-            back: gamepad.is_pressed(Button::Select),
-            left_bumper: gamepad.is_pressed(Button::LeftTrigger),
-            right_bumper: gamepad.is_pressed(Button::RightTrigger),
-
-            // Note: unideal, but we can't get the analog value from gilrs
+            timestamp,
+            // Note: unideal, but we can't? get the analog value from gilrs
             left_trigger: gamepad.is_pressed(Button::LeftTrigger2) as u8 as f32,
             right_trigger: gamepad.is_pressed(Button::RightTrigger2) as u8 as f32,
-            touchpad: false,
+            gamepad_type: GAMEPAD_TYPE_UNKNOWN,
+            legacy_type: GAMEPAD_TYPE_UNKNOWN,
+            user,
+            button_flags: flags.bits(),
+            touchpad_finger_1_x: 0.0,
+            touchpad_finger_1_y: 0.0,
+            touchpad_finger_2_x: 0.0,
+            touchpad_finger_2_y: 0.0,
         }
     }
 }
