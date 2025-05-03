@@ -4,19 +4,27 @@ use std::sync::{
 };
 
 use crate::{
-    app::get_timestamp_nanos, ftc_proto::{
+    app::get_timestamp_nanos,
+    ftc_proto::{
         gamepad_packet::GamepadPacketData,
         heartbeat_packet::HeartbeatPacketData,
         packet::{Packet, PacketType},
-        robot_command::RobotCommandPacketData,
-        time_packet::TimePacketData,
+        robot_command::{
+            NOTIFY_ACTIVE_CONFIGURATION, NOTIFY_INIT_OPMODE, NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES,
+            NOTIFY_RUN_OPMODE, OpModeData, REQUEST_ACTIVE_CONFIGURATION, REQUEST_OP_MODES,
+            RobotCommandPacketData, RobotConfiguration,
+        },
+        telemetry_packet::{
+            ROBOT_BATTERY_LEVEL_KEY, ROBOT_CONTROLLER_BATTERY_STATUS_KEY, SYSTEM_ERROR_KEY,
+            SYSTEM_NONE_KEY, SYSTEM_WARNING_KEY, TelemetryEntry, TelemetryPacket,
+        },
+        time_packet::{RobotOpmodeState, TimePacketData},
         traits::{Readable, Writeable},
-    }, input::Gamepad, robot::Robot
+    },
+    input::Gamepad,
+    robot::Robot,
 };
-use tokio::{
-    net::UdpSocket,
-    sync::RwLock,
-};
+use tokio::{net::UdpSocket, sync::RwLock};
 
 // Todo: potentially randomly generate this?
 pub const SEQUENCE_NUMBER: AtomicI16 = AtomicI16::new(0);
@@ -66,7 +74,15 @@ pub async fn send_bytes(socket: &Arc<UdpSocket>, bytes: Vec<u8>) {
     }
 }
 
-/// Starts the network thread, returning a handle to read debug data and a copy of the send sink
+pub struct NetworkHandler {
+    pub socket: Arc<UdpSocket>,
+    pub debug: Arc<RwLock<NetworkDebugData>>,
+    pub robot: Arc<RwLock<Robot>>,
+    pub gamepad_one: Arc<RwLock<Option<Gamepad>>>,
+    pub gamepad_two: Arc<RwLock<Option<Gamepad>>>,
+}
+
+/// Starts the network thread, returning a handle to read debug data and a reference to the socket
 pub async fn start_network_thread(
     remote_addr: &str,
     robot: Arc<RwLock<Robot>>,
@@ -95,9 +111,15 @@ pub async fn start_network_thread(
 
     let debug_copy = debug.clone();
 
-    tokio::task::spawn(async move {
-        network_thread(sock, debug_copy, robot, gamepad_one, gamepad_two).await
-    });
+    let mut network_handler = NetworkHandler {
+        debug: debug_copy,
+        socket: sock,
+        robot,
+        gamepad_one,
+        gamepad_two,
+    };
+
+    tokio::task::spawn(async move { network_handler.network_thread().await });
 
     log::info!("Spawned network thread!");
 
@@ -106,153 +128,398 @@ pub async fn start_network_thread(
 
 pub const RECEIVE_BUFFER_SIZE: usize = 16000;
 
-pub async fn network_thread(
-    socket: Arc<UdpSocket>,
-    debug: Arc<RwLock<NetworkDebugData>>,
-    robot: Arc<RwLock<Robot>>,
-    gamepad_one: Arc<RwLock<Option<Gamepad>>>,
-    gamepad_two: Arc<RwLock<Option<Gamepad>>>,
-) {
-    let mut last_gamepad_update = std::time::Instant::now();
-    let mut last_time_request_packet = std::time::Instant::now();
-    let mut last_heartbeat_request_packet = std::time::Instant::now();
+impl NetworkHandler {
+    pub async fn network_thread(&mut self) {
+        let mut last_gamepad_update = std::time::Instant::now();
+        let mut last_time_request_packet = std::time::Instant::now();
+        let mut last_heartbeat_request_packet = std::time::Instant::now();
 
-    let mut last_gamepad_1_packet = GamepadPacketData::default_for_user(1);
-    let mut last_gamepad_2_packet = GamepadPacketData::default_for_user(2);
+        let mut last_gamepad_1_packet = GamepadPacketData::default_for_user(1);
+        let mut last_gamepad_2_packet = GamepadPacketData::default_for_user(2);
 
-    let mut recv_buffer = [0; RECEIVE_BUFFER_SIZE];
+        // Buffer we'll receive bytes into
+        //
+        // The size of this buffer has to be the largest possible packet size
+        //
+        // Allocating like 16 kb of ram shouldn't be an issue
+        let mut recv_buffer = [0; RECEIVE_BUFFER_SIZE];
 
-    loop {
-		  // Clear the receive buffer, so we can once again receive data into it
-        recv_buffer = [0; RECEIVE_BUFFER_SIZE];
+        // As a start, request opmodes and active configuration
+        //
+        // The official client also requests the hardware configuration, but we haven't implemented
+        // that yet
+        send_packet(
+            &self.socket,
+            Packet::from_packet_type_and_writable(
+                PacketType::Command,
+                &RobotCommandPacketData {
+                    data: String::new(),
+                    command: REQUEST_OP_MODES.to_string(),
+                    timestamp: get_timestamp_nanos(),
+                    acknowledged: false,
+                },
+            ),
+        )
+        .await;
 
-        tokio::select! {
-            num_bytes_option = socket.recv(&mut recv_buffer) => {
-                if let Ok(num_bytes) = num_bytes_option {
-                    log::debug!("Received message of {} bytes", num_bytes);
+        send_packet(
+            &self.socket,
+            Packet::from_packet_type_and_writable(
+                PacketType::Command,
+                &RobotCommandPacketData {
+                    data: String::new(),
+                    command: REQUEST_ACTIVE_CONFIGURATION.to_string(),
+                    timestamp: get_timestamp_nanos(),
+                    acknowledged: false,
+                },
+            ),
+        )
+        .await;
 
-                    if num_bytes == RECEIVE_BUFFER_SIZE {
-                        log::warn!("Received full buffer, you may need to increase buffer size");
-                    }
+        loop {
+            // Clear the receive buffer, so we can once again receive data into it
+            recv_buffer = [0; RECEIVE_BUFFER_SIZE];
 
-                    let mut vec_buffer = recv_buffer[0..num_bytes].to_vec();
+            tokio::select! {
+                num_bytes_option = self.socket.recv(&mut recv_buffer) => {
+                    if let Ok(num_bytes) = num_bytes_option {
+                        log::debug!("Received message of {} bytes", num_bytes);
 
-                    match Packet::read_from(&mut vec_buffer) {
-                        Some(packet) => {
-                            match packet.packet_type {
-                                         PacketType::Time => {
-                                            let Some(data) = TimePacketData::read_from(&mut vec_buffer) else {
-                                                log::warn!("Failed to deserialize time packet: {:?}", recv_buffer[0..num_bytes].to_vec());
-                                                                continue;
-                                            };
-
-                                            log::debug!("Received time packet..");
-
-                                            robot.write().await.active_opmode_state = Some(data.robot_op_mode_state);
-                                         }
-                                         PacketType::Gamepad => {
-                                            log::warn!("Received gamepad packet from the robot, the server is likely incredibly drunk");
-                                                          continue;
-                                         }
-                                         PacketType::Heartbeat => {
-                                            let Some(data) = HeartbeatPacketData::read_from(&mut vec_buffer) else {
-                                                log::warn!("Failed to deserialize heartbeat packet: {:?}", recv_buffer[0..num_bytes].to_vec());
-                                                                continue;
-                                            };
-
-                                            log::debug!("Received heartbeat packet (sequence number {}), robot is running on sdk from {}/{} on {}.{}", data.sequence_number, data.sdk_build_month, data.sdk_build_year, data.sdk_major_version, data.sdk_minor_version);
-                                         }
-                                         PacketType::Command => {
-                                            let Some(data) = RobotCommandPacketData::read_from(&mut vec_buffer) else {
-                                                                log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
-                                                                continue;
-                                            };
-
-                                            log::debug!("Received command packet ({:?})", data);
-
-                                         }
-                                         PacketType::Telemetry => {
-                                             let Some(data) = RobotCommandPacketData::read_from(&mut vec_buffer) else {
-                                                log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
-                                                                continue;
-                                            };
-
-                                            log::debug!("Received telemetry packet.. ({:?})", data);
-                                         }
-                            }
+                        if num_bytes == RECEIVE_BUFFER_SIZE {
+                            log::warn!("Received full buffer, you may need to increase buffer size");
                         }
-                        None => {
-                           log::warn!("Failed to deserialize packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+
+                        let mut vec_buffer = recv_buffer[0..num_bytes].to_vec();
+
+                        match Packet::read_from(&mut vec_buffer) {
+                            Some(packet) => {
+                                match packet.packet_type {
+                                             PacketType::Time => {
+                                                let Some(data) = TimePacketData::read_from(&mut vec_buffer) else {
+                                                    log::warn!("Failed to deserialize time packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                                                                    continue;
+                                                };
+
+                                                log::debug!("Received time packet..");
+
+                                                self.robot.write().await.active_opmode_state = Some(data.robot_op_mode_state);
+                                             }
+                                             PacketType::Gamepad => {
+                                                log::warn!("Received gamepad packet from the robot, the server is likely incredibly drunk");
+                                                              continue;
+                                             }
+                                             PacketType::Heartbeat => {
+                                                let Some(data) = HeartbeatPacketData::read_from(&mut vec_buffer) else {
+                                                    log::warn!("Failed to deserialize heartbeat packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                                                                    continue;
+                                                };
+
+                                                log::debug!("Received heartbeat packet (sequence number {}), robot is running on sdk from {}/{} on {}.{}", data.sequence_number, data.sdk_build_month, data.sdk_build_year, data.sdk_major_version, data.sdk_minor_version);
+                                             }
+                                             PacketType::Command => {
+                                                let Some(data) = RobotCommandPacketData::read_from(&mut vec_buffer) else {
+                                                                    log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                                                                    continue;
+                                                };
+
+                                                log::debug!("Received command packet ({:?})", data);
+
+                                             }
+                                             PacketType::Telemetry => {
+                                                 let Some(data) = RobotCommandPacketData::read_from(&mut vec_buffer) else {
+                                                    log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                                                                    continue;
+                                                };
+
+                                                log::debug!("Received telemetry packet.. ({:?})", data);
+                                             }
+                                }
+                            }
+                            None => {
+                               log::warn!("Failed to deserialize packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                            }
                         }
                     }
                 }
+
+                _ = tokio::time::sleep_until((last_gamepad_update + std::time::Duration::from_millis(40)).into()) => {
+
+                    let gamepad_1 = if let Some(gp) = &*self.gamepad_one.read().await {
+                            gp.last_state.clone()
+                         } else {
+                            GamepadPacketData::default_for_user(1)
+                         };
+
+                         let gamepad_2 = if let Some(gp) = &*self.gamepad_two.read().await {
+                            gp.last_state.clone()
+                         } else {
+                            GamepadPacketData::default_for_user(2)
+                         };
+
+                                if gamepad_1 != last_gamepad_1_packet {
+                            log::info!("Sending gamepad update for user 1..");
+
+                                    let packet = Packet::from_packet_type_and_writable(PacketType::Gamepad, &gamepad_1);
+
+                                    send_packet(&self.socket, packet).await;
+
+                                    last_gamepad_1_packet = gamepad_1;
+                                }
+
+                                if gamepad_2 != last_gamepad_2_packet {
+                            log::info!("Sending gamepad update for user 2..");
+
+                                    let packet = Packet::from_packet_type_and_writable(PacketType::Gamepad, &gamepad_2);
+
+                                    send_packet(&self.socket, packet).await;
+
+                                    last_gamepad_2_packet = gamepad_2;
+                                }
+
+                            last_gamepad_update = std::time::Instant::now();
+                }
+
+                    _ = tokio::time::sleep_until((last_time_request_packet + std::time::Duration::from_millis(100)).into()) => {
+
+                         log::debug!("Sending robot time packet..");
+
+                                let unix_millis = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+
+                         let packet = Packet::from_packet_type_and_writable(PacketType::Time, &TimePacketData {timestamp: get_timestamp_nanos(), robot_op_mode_state: 0.into(), unix_millis_sent: unix_millis, unix_millis_received_1: 0, unix_millis_received_2: 0, timezone: String::from("Europe/Ljubljana")});
+
+                         send_packet(&self.socket, packet).await;
+
+                    last_time_request_packet = std::time::Instant::now();
+                }
+
+                    _ = tokio::time::sleep_until((last_heartbeat_request_packet + std::time::Duration::from_secs(1)).into()) => {
+
+                         log::debug!("Sending robot heartbeat request..");
+
+                         let packet = Packet::from_packet_type_and_writable(PacketType::Heartbeat, &HeartbeatPacketData {sequence_number: 10003, peer_type: 1, sdk_build_month: 1, sdk_build_year: 2025, sdk_major_version: 10, sdk_minor_version: 2});
+
+                         send_packet(&self.socket, packet).await;
+
+                    last_heartbeat_request_packet = std::time::Instant::now();
+                }
             }
+        }
 
-            _ = tokio::time::sleep_until((last_gamepad_update + std::time::Duration::from_millis(40)).into()) => {
+        log::error!("Closing network thread..");
 
-                let gamepad_1 = if let Some(gp) = &*gamepad_one.read().await {
-                        gp.last_state.clone()
-                     } else {
-                        GamepadPacketData::default_for_user(1)
-                     };
+        drop(self.socket);
+        self.debug.write().await.state = NetworkStatus::Disconnected;
+    }
 
-                     let gamepad_2 = if let Some(gp) = &*gamepad_two.read().await {
-                        gp.last_state.clone()
-                     } else {
-                        GamepadPacketData::default_for_user(2)
-                     };
+    /// Handles receiving a telemetry packet
+    pub async fn handle_telemetry_packet(&mut self, packet: TelemetryPacket) {
+        if !packet.tag.is_empty() {
+            match packet.tag.as_str() {
+                ROBOT_BATTERY_LEVEL_KEY => {
+                    let entry = packet.string_entries[0].clone();
 
-                            if gamepad_1 != last_gamepad_1_packet {
-                        log::info!("Sending gamepad update for user 1..");
+                    self.update_battery_voltage_from_telemetry_entry(entry)
+                        .await;
+                }
 
-                                let packet = Packet::from_packet_type_and_writable(PacketType::Gamepad, &gamepad_1);
+                ROBOT_CONTROLLER_BATTERY_STATUS_KEY => {
+                    let entry = packet.string_entries[0].clone();
 
-                                send_packet(&socket, packet).await;
+                    if entry.key != ROBOT_CONTROLLER_BATTERY_STATUS_KEY {
+                        log::warn!(
+                            "Key mismatch: got {}, expected {}",
+                            entry.key,
+                            ROBOT_CONTROLLER_BATTERY_STATUS_KEY
+                        );
+                        return;
+                    }
 
-                                last_gamepad_1_packet = gamepad_1;
-                            }
+                    log::info!("Got robot controller battery status: {}", entry.value);
+                }
 
-                            if gamepad_2 != last_gamepad_2_packet {
-                        log::info!("Sending gamepad update for user 2..");
+                SYSTEM_WARNING_KEY => {
+                    let entry = packet.string_entries[0].clone();
 
-                                let packet = Packet::from_packet_type_and_writable(PacketType::Gamepad, &gamepad_2);
+                    if entry.key != SYSTEM_WARNING_KEY {
+                        log::warn!(
+                            "Key mismatch: got {}, expected {}",
+                            entry.key,
+                            SYSTEM_WARNING_KEY
+                        );
+                        return;
+                    }
 
-                                send_packet(&socket, packet).await;
+                    self.robot.write().await.warning_message = Some(entry.value);
+                }
 
-                                last_gamepad_2_packet = gamepad_2;
-                            }
+                SYSTEM_ERROR_KEY => {
+                    let entry = packet.string_entries[0].clone();
 
-                        last_gamepad_update = std::time::Instant::now();
+                    if entry.key != SYSTEM_ERROR_KEY {
+                        log::warn!(
+                            "Key mismatch: got {}, expected {}",
+                            entry.key,
+                            SYSTEM_ERROR_KEY
+                        );
+                        return;
+                    }
+
+                    self.robot.write().await.error_message = Some(entry.value);
+                }
+
+                SYSTEM_NONE_KEY => {
+                    let entry = packet.string_entries[0].clone();
+
+                    if entry.key != SYSTEM_NONE_KEY {
+                        log::warn!(
+                            "Key mismatch: got {}, expected {}",
+                            entry.key,
+                            SYSTEM_NONE_KEY
+                        );
+                        return;
+                    }
+
+                    if !entry.value.is_empty() {
+                        log::warn!("System none data wasn't empty ({})", entry.value);
+                    }
+
+                    self.robot.write().await.warning_message = None;
+                    self.robot.write().await.error_message = None;
+                }
+
+                &_ => {
+                    log::warn!("Got unexpected tag: {:?}", packet.tag);
+                    return;
+                }
             }
+        }
 
-				_ = tokio::time::sleep_until((last_time_request_packet + std::time::Duration::from_millis(100)).into()) => {
-
-                     log::debug!("Sending robot time packet..");
-
-							let unix_millis = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-
-                     let packet = Packet::from_packet_type_and_writable(PacketType::Time, &TimePacketData {timestamp: get_timestamp_nanos(), robot_op_mode_state: 0.into(), unix_millis_sent: unix_millis, unix_millis_received_1: 0, unix_millis_received_2: 0, timezone: String::from("Europe/Ljubljana")});
-
-					 send_packet(&socket, packet).await;
-
-                last_heartbeat_request_packet = std::time::Instant::now();
+        // todo: add a user telemetry thing to the app
+        for entry in packet.string_entries {
+            if entry.key == ROBOT_BATTERY_LEVEL_KEY {
+                self.update_battery_voltage_from_telemetry_entry(entry)
+                    .await;
             }
+        }
 
-                _ = tokio::time::sleep_until((last_heartbeat_request_packet + std::time::Duration::from_secs(1)).into()) => {
+        if packet.float_entries.len() > 0 {
+            log::warn!("Received some float entries! {:?}", packet.float_entries);
+        }
+    }
 
-                     log::debug!("Sending robot heartbeat request..");
+    /// Attempts to update the robot's battery voltage from a telemetry key we got
+    pub async fn update_battery_voltage_from_telemetry_entry(&mut self, entry: TelemetryEntry) {
+        if entry.key != ROBOT_BATTERY_LEVEL_KEY {
+            log::warn!(
+                "Key mismatch: got {}, expected {}",
+                entry.key,
+                ROBOT_BATTERY_LEVEL_KEY
+            );
+            return;
+        }
 
-                     let packet = Packet::from_packet_type_and_writable(PacketType::Heartbeat, &HeartbeatPacketData {sequence_number: 10003, peer_type: 1, sdk_build_month: 1, sdk_build_year: 2025, sdk_major_version: 10, sdk_minor_version: 2});
+        match entry.value.parse::<f32>() {
+            Ok(battery_voltage) => {
+                let mut robot_write = self.robot.write().await;
 
-					 send_packet(&socket, packet).await;
+                robot_write.battery_voltage = Some(battery_voltage);
+                robot_write.last_battery_update = std::time::Instant::now();
 
-                last_heartbeat_request_packet = std::time::Instant::now();
+                drop(robot_write);
+            }
+            Err(e) => {
+                log::warn!(
+                    "Failed to parse battery voltage key: {} ({})",
+                    e,
+                    entry.value
+                );
             }
         }
     }
 
-    log::error!("Closing network thread..");
+    /// Handles receiving a command packet
+    pub async fn handle_command_packet(&mut self, packet: RobotCommandPacketData) {
+        if packet.acknowledged {
+            log::debug!("Received acknowledge for command {}", packet.command);
 
-	 drop(socket);
-    debug.write().await.state = NetworkStatus::Disconnected;
+            // todo: properly handle this
+            return;
+        }
+
+        log::info!("Received command {}", packet.command);
+
+        // Send back an ackowledge for this
+        send_packet(
+            &self.socket,
+            Packet::from_packet_type_and_writable(
+                PacketType::Command,
+                &RobotCommandPacketData {
+                    command: packet.command.clone(),
+                    acknowledged: true,
+                    data: String::new(),
+                    timestamp: get_timestamp_nanos(),
+                },
+            ),
+        )
+        .await;
+
+        match packet.command.as_str() {
+            NOTIFY_OP_MODE_STATE => match packet.data.parse::<i8>() {
+                Ok(i8) => {
+                    let state = RobotOpmodeState::from(i8);
+
+                    self.robot.write().await.active_opmode_state = Some(state);
+                }
+                Err(e) => {
+                    log::warn!("Failed to parse opmode state: {} ({})", e, packet.data);
+                }
+            },
+            NOTIFY_OP_MODES => match serde_json::from_str::<Vec<OpModeData>>(&packet.data) {
+                Ok(opmode_list) => {
+                    self.robot.write().await.opmode_list = Some(opmode_list);
+                }
+                Err(e) => {
+                    log::warn!("Failed to parse opmode list: {} ({})", e, packet.data);
+                }
+            },
+            NOTIFY_ACTIVE_CONFIGURATION => {
+                match serde_json::from_str::<RobotConfiguration>(&packet.data) {
+                    Ok(config) => {
+                        // todo: save this somewhere and show it on the ui
+                        log::info!("Received robot configuration: {:?}", config);
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "Failed to parse robot configuration: {} ({})",
+                            e,
+                            packet.data
+                        );
+                    }
+                }
+            }
+            NOTIFY_INIT_OPMODE => {
+                let mut robot_write = self.robot.write().await;
+
+                robot_write.active_opmode = packet.data;
+                robot_write.active_opmode_state = Some(RobotOpmodeState::Initialized);
+
+                drop(robot_write);
+            }
+            NOTIFY_RUN_OPMODE => {
+                let mut robot_write = self.robot.write().await;
+
+                robot_write.active_opmode = packet.data;
+                robot_write.active_opmode_state = Some(RobotOpmodeState::Running);
+
+                drop(robot_write);
+            }
+            _ => {
+                log::warn!(
+                    "Received unhandled command: {} (data: {})",
+                    packet.command,
+                    packet.data
+                );
+            }
+        }
+    }
 }
