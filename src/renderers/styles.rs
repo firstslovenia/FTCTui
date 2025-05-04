@@ -1,10 +1,10 @@
 use ratatui::style::{Color, Style};
 
-// https://coolors.co/1f96ff-bdae93-ebdbb2-e02f29-ffba49-b8bb26
+// https://coolors.co/ff9147-ffa970-bdae93-ebdbb2-e02f29-ffba49-b8bb26
 // The colors are heavily inspired by gruvbox: https://github.com/morhetz/gruvbox?tab=readme-ov-file
 
-pub const PRIMARY_COLOR: Color = Color::from_u32(0x1F96FF);
-pub const PRIMARY_COLOR_LIGHTER: Color = Color::from_u32(0x5CB3FF);
+pub const PRIMARY_COLOR: Color = Color::from_u32(0xFFA970);
+pub const PRIMARY_COLOR_LIGHTER: Color = Color::from_u32(0xFF9147);
 
 pub const SELECTED_BACKGROUND: Color = Color::from_u32(0x665C54);
 

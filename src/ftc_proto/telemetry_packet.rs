@@ -10,7 +10,11 @@ pub const SYSTEM_WARNING_KEY: &str = "$System$Warning$";
 pub const SYSTEM_ERROR_KEY: &str = "$System$Error$";
 pub const SYSTEM_NONE_KEY: &str = "$System$None$";
 
-pub struct TelemetryPacket {
+#[derive(Debug, Clone, PartialEq, Default)]
+/// Data structure of a telemetry packet
+///
+/// Contains string and float entries
+pub struct TelemetryPacketData {
     /// Unix epoch in milliseconds of when packet was sent
     pub unix_timestamp_millis: i64,
 
@@ -27,7 +31,7 @@ pub struct TelemetryPacket {
     pub float_entries: Vec<FloatEntry>,
 }
 
-impl Readable for TelemetryPacket {
+impl Readable for TelemetryPacketData {
     fn read_from(buffer: &mut Vec<u8>) -> Option<Self>
     where
         Self: Sized,
@@ -53,7 +57,7 @@ impl Readable for TelemetryPacket {
             float_entries.push(FloatEntry::read_from(buffer)?);
         }
 
-        Some(TelemetryPacket {
+        Some(TelemetryPacketData {
             unix_timestamp_millis,
             is_sorted,
             robot_state,
@@ -64,7 +68,7 @@ impl Readable for TelemetryPacket {
     }
 }
 
-impl Writeable for TelemetryPacket {
+impl Writeable for TelemetryPacketData {
     fn write_to(&self, buffer: &mut Vec<u8>) {
         self.unix_timestamp_millis.write_to(buffer);
         self.is_sorted.write_to(buffer);

@@ -4,7 +4,7 @@ use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::{
-    app::{get_timestamp_millis, OP_MODES_BLOCK_ID}, ftc_dashboard::{gamepad_state::GamepadState, message::Message, robot_status::OpModeStatus}, ftc_proto::{
+    app::{get_timestamp_millis, AUTO_BLOCK_ID, GAMEPADS_BLOCK_ID, TELEOP_BLOCK_ID}, ftc_dashboard::{gamepad_state::GamepadState, message::Message, robot_status::OpModeStatus}, ftc_proto::{
         gamepad_packet::{ButtonFlags, GamepadPacketData, GAMEPAD_TYPE_UNKNOWN},
         packet::{Packet, PacketType},
         robot_command::{RobotCommandPacketData, INIT_OPMODE, OPMODE_STOP, RUN_OPMODE},
@@ -44,16 +44,13 @@ impl App {
 
             // Main action button
             (_, KeyCode::Enter) => match self.selected_block {
-                OP_MODES_BLOCK_ID => {
-                    let robot = self.robot.read().await;
+                AUTO_BLOCK_ID | TELEOP_BLOCK_ID => {
+                    if let Some(selected_op_mode) = self.get_selected_opmode().await {
+                        let robot = self.robot.read().await;
 
-                    if let Some(op_modes) = &robot.opmode_list {
-                        if let Some(robot_status) = &robot.active_opmode_state {
-                            let selected_op_mode =
-                                op_modes[self.opmode_list_selected_index].clone();
-
+                        if let Some(status) = &robot.active_opmode_state {
                             if robot.active_opmode == selected_op_mode.name {
-                                match robot_status {
+                                match status {
                                     RobotOpmodeState::Initialized | RobotOpmodeState::Stopped => {
                                         self.start_opmode(selected_op_mode.name.clone()).await;
                                     }
@@ -94,7 +91,7 @@ impl App {
 
             // Move main selection forwards and backwards
             (_, KeyCode::Tab) => {
-                if self.selected_block == 4 {
+                if self.selected_block == GAMEPADS_BLOCK_ID {
                     self.selected_block = 0;
                 } else {
                     self.selected_block = self.selected_block + 1;
@@ -104,7 +101,7 @@ impl App {
             // Move main selection forwards and backwards
             (_, KeyCode::BackTab) => {
                 if self.selected_block == 0 {
-                    self.selected_block = 4;
+                    self.selected_block = GAMEPADS_BLOCK_ID;
                 } else {
                     self.selected_block = self.selected_block - 1;
                 }
@@ -112,38 +109,68 @@ impl App {
 
             // Move sub selection up and down
             (_, KeyCode::Up) | (_, KeyCode::Char('k')) => match self.selected_block {
-                OP_MODES_BLOCK_ID => {
-                    if self.opmode_list_selected_index == 0 {
+                AUTO_BLOCK_ID => {
+                    if self.auto_list_selected_index == 0 {
                         let mut max_index = 0;
 
-                        let robot = self.robot.read().await;
+                        let auto_modes = self.get_auto_opmodes().await;
 
-                        if let Some(op_modes) = &robot.opmode_list {
-                            max_index = op_modes.len() - 1;
+                        if !auto_modes.is_empty() {
+                            max_index = auto_modes.len() - 1;
                         }
 
-                        self.opmode_list_selected_index = max_index;
+                        self.auto_list_selected_index = max_index;
                     } else {
-                        self.opmode_list_selected_index -= 1;
+                        self.auto_list_selected_index -= 1;
+                    }
+                }
+                TELEOP_BLOCK_ID => {
+                    if self.teleop_list_selected_index == 0 {
+                        let mut max_index = 0;
+
+                        let teleop_modes = self.get_teleop_opmodes().await;
+
+                        if !teleop_modes.is_empty() {
+                            max_index = teleop_modes.len() - 1;
+                        }
+
+                        self.teleop_list_selected_index = max_index;
+                    } else {
+                        self.teleop_list_selected_index -= 1;
                     }
                 }
                 _ => {}
             },
 
             (_, KeyCode::Down) | (_, KeyCode::Char('j')) => match self.selected_block {
-                OP_MODES_BLOCK_ID => {
+                AUTO_BLOCK_ID => {
                     let mut max_index = 0;
 
-                    let robot = self.robot.read().await;
+                    let auto_modes = self.get_auto_opmodes().await;
 
-                    if let Some(op_modes) = &robot.opmode_list {
-                        max_index = op_modes.len() - 1;
+                    if !auto_modes.is_empty() {
+                        max_index = auto_modes.len() - 1;
                     }
 
-                    if self.opmode_list_selected_index == max_index {
-                        self.opmode_list_selected_index = 0;
+                    if self.auto_list_selected_index == max_index {
+                        self.auto_list_selected_index = 0;
                     } else {
-                        self.opmode_list_selected_index += 1;
+                        self.auto_list_selected_index += 1;
+                    }
+                }
+                TELEOP_BLOCK_ID => {
+                    let mut max_index = 0;
+
+                    let teleop_modes = self.get_teleop_opmodes().await;
+
+                    if !teleop_modes.is_empty() {
+                        max_index = teleop_modes.len() - 1;
+                    }
+
+                    if self.teleop_list_selected_index == max_index {
+                        self.teleop_list_selected_index = 0;
+                    } else {
+                        self.teleop_list_selected_index += 1;
                     }
                 }
                 _ => {}

@@ -34,10 +34,11 @@ lazy_static! {
 }
 
 pub const DEBUG_BLOCK_ID: u8 = 0;
-pub const OP_MODES_BLOCK_ID: u8 = 1;
-pub const ROBOT_BLOCK_ID: u8 = 2;
-pub const ACTIVE_OPMODE_BLOCK_ID: u8 = 3;
-pub const GAMEPADS_BLOCK_ID: u8 = 4;
+pub const TELEOP_BLOCK_ID: u8 = 1;
+pub const AUTO_BLOCK_ID: u8 = 2;
+pub const ROBOT_BLOCK_ID: u8 = 3;
+pub const ACTIVE_OPMODE_BLOCK_ID: u8 = 4;
+pub const GAMEPADS_BLOCK_ID: u8 = 5;
 
 /// The main application which holds the state and logic of the application.
 #[derive(Debug)]
@@ -56,8 +57,12 @@ pub struct App {
 
     /// The main "block" the user has selected, going from the top left to the bottom right
     pub selected_block: u8,
-    /// The opmode from the opmode list the user currently has selected
-    pub opmode_list_selected_index: usize,
+
+    /// The teleop opmode from the user currently has selected
+    pub teleop_list_selected_index: usize,
+
+    /// The auto opmode from the user currently has selected
+    pub auto_list_selected_index: usize,
 
     /// Handle of our gamepad input handler
     pub gilrs: Gilrs,
@@ -92,6 +97,27 @@ impl App {
                     source: None,
                     system_opmode_display_name: None,
                 },
+					 OpModeData {
+                    name: "Autonomous".to_string(),
+                    group: "jože".to_string(),
+                    flavor: OpModeFlavor::Autonomous,
+                    source: None,
+                    system_opmode_display_name: None,
+                },
+					 OpModeData {
+                    name: "CoolerAutonomous".to_string(),
+                    group: "jože".to_string(),
+                    flavor: OpModeFlavor::Autonomous,
+                    source: None,
+                    system_opmode_display_name: None,
+                },
+					 OpModeData {
+                    name: "Bautonomous".to_string(),
+                    group: DEFAULT_OPMODE_GROUP.to_string(),
+                    flavor: OpModeFlavor::Autonomous,
+                    source: None,
+                    system_opmode_display_name: None,
+                },
             ]),
             active_opmode: OPMODE_STOP.to_string(),
             error_message: None,
@@ -117,7 +143,8 @@ impl App {
             running: false,
             selected_block: 1,
             robot,
-            opmode_list_selected_index: 0,
+            teleop_list_selected_index: 0,
+            auto_list_selected_index: 0,
             gilrs: Gilrs::new().unwrap(),
             gamepad_one,
             gamepad_two,
@@ -143,6 +170,66 @@ impl App {
                 .await;
         }
         Ok(())
+    }
+
+    /// Returns a sorted list of opmodes
+    ///
+    /// Should always return the same order
+    pub async fn get_opmodes(&self) -> Vec<OpModeData> {
+        let mut opmodes = self
+            .robot
+            .read()
+            .await
+            .opmode_list
+            .clone()
+            .unwrap_or_default();
+
+        // First sort by group, then by name
+        opmodes.sort_by(|a, b| a.group.cmp(&b.group).then_with(|| a.name.cmp(&b.name)));
+
+        opmodes
+    }
+
+    /// Returns a sorted list of teleop modes
+    ///
+    /// Should always return the same order or opmodes
+    pub async fn get_teleop_opmodes(&self) -> Vec<OpModeData> {
+        let opmodes = self.get_opmodes().await;
+
+        opmodes
+            .into_iter()
+            .filter(|x| x.flavor == OpModeFlavor::Teleop)
+            .collect()
+    }
+
+    /// Returns a sorted list of auto modes
+    ///
+    /// Should always return the same order or opmodes
+    pub async fn get_auto_opmodes(&self) -> Vec<OpModeData> {
+        let opmodes = self.get_opmodes().await;
+
+        opmodes
+            .into_iter()
+            .filter(|x| x.flavor == OpModeFlavor::Autonomous)
+            .collect()
+    }
+
+    /// Fetches the currently selected opmode, if any
+    pub async fn get_selected_opmode(&self) -> Option<OpModeData> {
+        match self.selected_block {
+            TELEOP_BLOCK_ID => self
+                .get_teleop_opmodes()
+                .await
+                .get(self.teleop_list_selected_index)
+                .cloned(),
+
+            AUTO_BLOCK_ID => self
+                .get_auto_opmodes()
+                .await
+                .get(self.auto_list_selected_index)
+                .cloned(),
+            _ => None,
+        }
     }
 
     /// Starts an opmode with the given name

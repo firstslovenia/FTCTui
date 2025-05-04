@@ -1,3 +1,5 @@
 /target
 network-re
 log.log
+flamegraph.svg
+perf.data

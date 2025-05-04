@@ -16,7 +16,7 @@ use crate::{
         },
         telemetry_packet::{
             ROBOT_BATTERY_LEVEL_KEY, ROBOT_CONTROLLER_BATTERY_STATUS_KEY, SYSTEM_ERROR_KEY,
-            SYSTEM_NONE_KEY, SYSTEM_WARNING_KEY, TelemetryEntry, TelemetryPacket,
+            SYSTEM_NONE_KEY, SYSTEM_WARNING_KEY, TelemetryEntry, TelemetryPacketData,
         },
         time_packet::{RobotOpmodeState, TimePacketData},
         traits::{Readable, Writeable},
@@ -27,7 +27,7 @@ use crate::{
 use tokio::{net::UdpSocket, sync::RwLock};
 
 // Todo: potentially randomly generate this?
-pub const SEQUENCE_NUMBER: AtomicI16 = AtomicI16::new(0);
+pub static SEQUENCE_NUMBER: AtomicI16 = AtomicI16::new(0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Debug data shared from the network thread
@@ -38,6 +38,7 @@ pub struct NetworkDebugData {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// The current state of the network connection
 pub enum NetworkStatus {
+	 Establishing,
     Connected,
     Disconnected,
 }
@@ -50,12 +51,14 @@ pub async fn send_packet(socket: &Arc<UdpSocket>, packet: Packet) {
     let mut buffer = Vec::new();
 
     if packet.packet_type != PacketType::Heartbeat {
-        packet.sequence_number = Some(SEQUENCE_NUMBER.load(Ordering::SeqCst));
+        packet.sequence_number = Some(SEQUENCE_NUMBER.load(Ordering::Relaxed));
 
         SEQUENCE_NUMBER.fetch_add(1, Ordering::SeqCst);
     }
 
     packet.write_to(&mut buffer);
+
+	 log::trace!("Sending {:?} (seq {:?}, {} bytes of data)", packet.packet_type, packet.sequence_number, packet.data.len());
 
     send_bytes(socket, buffer).await;
 }
@@ -106,7 +109,7 @@ pub async fn start_network_thread(
     let sock = common_socket.clone();
 
     let debug = Arc::new(RwLock::new(NetworkDebugData {
-        state: NetworkStatus::Connected,
+        state: NetworkStatus::Establishing,
     }));
 
     let debug_copy = debug.clone();
@@ -312,7 +315,7 @@ impl NetworkHandler {
     }
 
     /// Handles receiving a telemetry packet
-    pub async fn handle_telemetry_packet(&mut self, packet: TelemetryPacket) {
+    pub async fn handle_telemetry_packet(&mut self, packet: TelemetryPacketData) {
         if !packet.tag.is_empty() {
             match packet.tag.as_str() {
                 ROBOT_BATTERY_LEVEL_KEY => {

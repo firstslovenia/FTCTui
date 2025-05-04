@@ -62,7 +62,7 @@ impl Readable for TimePacketData {
     }
 }
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Eq, PartialOrd, Ord, IntoPrimitive, FromPrimitive, Clone, Copy, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Eq, PartialOrd, Ord, IntoPrimitive, FromPrimitive, Clone, Copy, Debug, Default)]
 #[repr(i8)]
 pub enum RobotOpmodeState {
 	#[default]

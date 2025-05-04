@@ -11,12 +11,9 @@ use styles::{
 };
 
 use crate::{
-    App,
     app::{
-        ACTIVE_OPMODE_BLOCK_ID, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID, OP_MODES_BLOCK_ID,
-        ROBOT_BLOCK_ID,
-    },
-    ftc_proto::{gamepad_packet::ButtonFlags, time_packet::RobotOpmodeState},
+        ACTIVE_OPMODE_BLOCK_ID, TELEOP_BLOCK_ID, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID, ROBOT_BLOCK_ID, AUTO_BLOCK_ID
+    }, ftc_proto::{gamepad_packet::ButtonFlags, time_packet::RobotOpmodeState}, App
 };
 
 pub mod styles;
@@ -34,9 +31,10 @@ impl App {
                 .split(frame.area());
 
         let top_inner_layout = Layout::horizontal([
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
+            Constraint::Ratio(2, 6),
+            Constraint::Ratio(1, 6),
+				Constraint::Ratio(1, 6),
+            Constraint::Ratio(2, 6),
         ])
         .split(main_layout[0]);
 
@@ -46,8 +44,13 @@ impl App {
 
         let mut debug_block = Block::bordered().title("Debug").border_style(block_style());
 
-        let mut op_modes_block = Block::bordered()
-            .title("Op modes")
+        let mut teleop_block = Block::bordered()
+            .title("Teleop opmodes")
+            .border_style(block_style())
+            .padding(Padding::new(1, 1, 1, 1));
+
+		  let mut auto_block = Block::bordered()
+            .title("Auto opmodes")
             .border_style(block_style())
             .padding(Padding::new(1, 1, 1, 1));
 
@@ -71,8 +74,13 @@ impl App {
                     .border_style(selected_block_style())
                     .border_type(ratatui::widgets::BorderType::Thick)
             }
-            OP_MODES_BLOCK_ID => {
-                op_modes_block = op_modes_block
+            TELEOP_BLOCK_ID => {
+                teleop_block = teleop_block
+                    .border_style(selected_block_style())
+                    .border_type(ratatui::widgets::BorderType::Thick)
+            }
+				AUTO_BLOCK_ID => {
+                auto_block = auto_block
                     .border_style(selected_block_style())
                     .border_type(ratatui::widgets::BorderType::Thick)
             }
@@ -95,8 +103,9 @@ impl App {
         }
 
         frame.render_widget(&debug_block, top_inner_layout[0]);
-        frame.render_widget(&op_modes_block, top_inner_layout[1]);
-        frame.render_widget(&robot_block, top_inner_layout[2]);
+        frame.render_widget(&teleop_block, top_inner_layout[1]);
+        frame.render_widget(&auto_block, top_inner_layout[2]);
+        frame.render_widget(&robot_block, top_inner_layout[3]);
 
         frame.render_widget(&active_opmode_block, bottom_inner_layout[0]);
         frame.render_widget(&gamepads_block, bottom_inner_layout[1]);
@@ -108,12 +117,17 @@ impl App {
 
         frame.render_widget(
             self.create_robot_paragraph().await,
-            robot_block.inner(top_inner_layout[2]),
+            robot_block.inner(top_inner_layout[3]),
         );
 
         frame.render_widget(
-            self.create_opmode_list_paragraph().await,
+            self.create_teleop_list_paragraph().await,
             robot_block.inner(top_inner_layout[1]),
+        );
+
+		  frame.render_widget(
+            self.create_auto_list_paragraph().await,
+            robot_block.inner(top_inner_layout[2]),
         );
     }
 
@@ -408,26 +422,24 @@ impl App {
         Paragraph::new(robot_text).wrap(Wrap { trim: false })
     }
 
-    /// Creates the opmode list
-    pub async fn create_opmode_list_paragraph(&mut self) -> Paragraph {
+	 /// Creates the teleop opmode list
+    pub async fn create_teleop_list_paragraph(&mut self) -> Paragraph {
         let mut text: Vec<Line> = Vec::new();
 
-        let robot = self.robot.read().await;
+		  let opmode_list = self.get_teleop_opmodes().await;
 
-        let Some(opmode_list) = &robot.opmode_list else {
-            text.push(Line::from(vec![Span::styled(
-                "Waiting to receive opmodes..",
-                Style::new().fg(MUTED_TEXT_COLOR),
-            )]));
+		  let robot = self.robot.read().await;
 
-            return Paragraph::new(text).wrap(Wrap { trim: false });
-        };
+		  let active_opmode = robot.active_opmode.clone();
+		  let opmode_status = robot.active_opmode_state.clone();
+
+		  drop(robot);
 
         for i in 0..opmode_list.len() {
             let selected_opmode = opmode_list[i].clone();
 
             let selected =
-                self.opmode_list_selected_index == i && self.selected_block == OP_MODES_BLOCK_ID;
+                self.teleop_list_selected_index == i && self.selected_block == TELEOP_BLOCK_ID;
 
             let mut style = if selected {
                 Style::new().fg(TEXT_COLOR).bg(SELECTED_BACKGROUND)
@@ -435,8 +447,54 @@ impl App {
                 Style::new().fg(TEXT_COLOR)
             };
 
-            if let Some(status) = &robot.active_opmode_state {
-                if robot.active_opmode == selected_opmode.name {
+            if let Some(status) = opmode_status {
+                if active_opmode == selected_opmode.name {
+                    match status {
+                        RobotOpmodeState::Initialized | RobotOpmodeState::NotStarted => {
+                            style = style.fg(PRIMARY_COLOR_LIGHTER)
+                        }
+                        RobotOpmodeState::Running => style = style.fg(SUCCESS_COLOR),
+                        RobotOpmodeState::Stopped | RobotOpmodeState::EmergencyStopped => {
+                            style = style.fg(WARNING_COLOR)
+                        }
+                        RobotOpmodeState::Unknown => style = style.fg(TEXT_COLOR),
+                    }
+                }
+            }
+
+            text.push(Line::from(Span::styled(selected_opmode.name, style)));
+        }
+
+        Paragraph::new(text).wrap(Wrap { trim: false })
+    }
+
+    /// Creates the auto opmode list
+    pub async fn create_auto_list_paragraph(&mut self) -> Paragraph {
+        let mut text: Vec<Line> = Vec::new();
+
+		  let opmode_list = self.get_auto_opmodes().await;
+
+		  let robot = self.robot.read().await;
+
+		  let active_opmode = robot.active_opmode.clone();
+		  let opmode_status = robot.active_opmode_state.clone();
+
+		  drop(robot);
+
+        for i in 0..opmode_list.len() {
+            let selected_opmode = opmode_list[i].clone();
+
+            let selected =
+                self.auto_list_selected_index == i && self.selected_block == AUTO_BLOCK_ID;
+
+            let mut style = if selected {
+                Style::new().fg(TEXT_COLOR).bg(SELECTED_BACKGROUND)
+            } else {
+                Style::new().fg(TEXT_COLOR)
+            };
+
+            if let Some(status) = opmode_status {
+                if active_opmode == selected_opmode.name {
                     match status {
                         RobotOpmodeState::Initialized | RobotOpmodeState::NotStarted => {
                             style = style.fg(PRIMARY_COLOR_LIGHTER)
