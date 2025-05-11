@@ -336,10 +336,5 @@ pub fn read_string_from(buffer: &mut Vec<u8>, size: usize) -> Option<String> {
         return None;
     }
 
-    String::from_utf8(
-        buffer
-            .drain(..size)
-            .collect::<Vec<u8>>(),
-    )
-    .ok()
+    String::from_utf8(buffer.drain(..size).collect::<Vec<u8>>()).ok()
 }

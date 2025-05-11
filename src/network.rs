@@ -38,7 +38,7 @@ pub struct NetworkDebugData {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// The current state of the network connection
 pub enum NetworkStatus {
-	 Establishing,
+    Establishing,
     Connected,
     Disconnected,
 }
@@ -58,7 +58,12 @@ pub async fn send_packet(socket: &Arc<UdpSocket>, packet: Packet) {
 
     packet.write_to(&mut buffer);
 
-	 log::trace!("Sending {:?} (seq {:?}, {} bytes of data)", packet.packet_type, packet.sequence_number, packet.data.len());
+    log::trace!(
+        "Sending {:?} (seq {:?}, {} bytes of data)",
+        packet.packet_type,
+        packet.sequence_number,
+        packet.data.len()
+    );
 
     send_bytes(socket, buffer).await;
 }
@@ -145,7 +150,7 @@ impl NetworkHandler {
         // The size of this buffer has to be the largest possible packet size
         //
         // Allocating like 16 kb of ram shouldn't be an issue
-        let mut recv_buffer = [0; RECEIVE_BUFFER_SIZE];
+        let mut recv_buffer: [u8; RECEIVE_BUFFER_SIZE];
 
         // As a start, request opmodes and active configuration
         //
@@ -397,13 +402,27 @@ impl NetworkHandler {
             }
         }
 
-        // todo: add a user telemetry thing to the app
+        let mut user_telemetry_lines = Vec::new();
+
         for entry in packet.string_entries {
             if entry.key == ROBOT_BATTERY_LEVEL_KEY {
                 self.update_battery_voltage_from_telemetry_entry(entry)
                     .await;
+            } else {
+                // All user telemetry keys start with the null byte
+                if entry.key.starts_with('\0') {
+                    user_telemetry_lines.push(entry.value);
+                } else {
+                    log::warn!(
+                        "Unexpected telemetry pair: {:?} - {:?}",
+                        entry.key,
+                        entry.value
+                    );
+                }
             }
         }
+
+        self.robot.write().await.telemetry_list = user_telemetry_lines;
 
         if packet.float_entries.len() > 0 {
             log::warn!("Received some float entries! {:?}", packet.float_entries);

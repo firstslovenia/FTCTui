@@ -19,9 +19,9 @@ pub const WARNING_COLOR: Color = Color::from_u32(0xFFBA49);
 pub const SUCCESS_COLOR: Color = Color::from_u32(0xB8BB26);
 
 pub fn block_style() -> Style {
-	Style::new().fg(PRIMARY_COLOR)
+    Style::new().fg(PRIMARY_COLOR)
 }
 
 pub fn selected_block_style() -> Style {
-	Style::new().fg(PRIMARY_COLOR_LIGHTER)
+    Style::new().fg(PRIMARY_COLOR_LIGHTER)
 }

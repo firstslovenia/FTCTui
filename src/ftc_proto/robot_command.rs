@@ -120,23 +120,22 @@ pub const NOTIFY_RUN_OPMODE: &str = "CMD_NOTIFY_RUN_OP_MODE";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 /// Data about a particular opmode, sent in notify opmode list
 pub struct OpModeData {
+    /// Type of opmode. System opmodes cannot be user defined, and an example of one is
+    /// "$Stop$Robot$", which means there is no running opmode.
+    pub flavor: OpModeFlavor,
 
-	/// Type of opmode. System opmodes cannot be user defined, and an example of one is
-	/// "$Stop$Robot$", which means there is no running opmode.
-	pub flavor: OpModeFlavor,
+    /// Name of the group the opmode belongs to. "$$$$$$$" is the default group
+    pub group: String,
 
-	/// Name of the group the opmode belongs to. "$$$$$$$" is the default group
-	pub group: String,
+    /// Name of the opmode
+    pub name: String,
 
-	/// Name of the opmode
-	pub name: String,
+    /// External source of the opmode, if any
+    pub source: Option<OpModeSource>,
 
-	/// External source of the opmode, if any
-	pub source: Option<OpModeSource>,
-
-	#[serde(rename = "systemOpModeBaseDisplayName")]
-	/// User friendly display name for system opmodes
-	pub system_opmode_display_name: Option<String>,
+    #[serde(rename = "systemOpModeBaseDisplayName")]
+    /// User friendly display name for system opmodes
+    pub system_opmode_display_name: Option<String>,
 }
 
 pub const DEFAULT_OPMODE_GROUP: &str = "$$$$$$$";
@@ -146,46 +145,45 @@ pub const OPMODE_STOP: &str = "$Stop$Robot$";
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 /// What type of opmode it is
 pub enum OpModeFlavor {
-	Autonomous,
-	System,
-	Teleop
+    Autonomous,
+    System,
+    Teleop,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 /// Optional external source of the opmode
 pub enum OpModeSource {
-	AndroidStudio,
-	Blockly,
-	ExternalLibrary,
+    AndroidStudio,
+    Blockly,
+    ExternalLibrary,
 
-	#[serde(rename = "ONBOTJAVA")]
-	OnbotJava,
+    #[serde(rename = "ONBOTJAVA")]
+    OnbotJava,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "camelCase")]
 /// Data about a particular configuration (file)
 pub struct RobotConfiguration {
+    /// Unsure what this means
+    pub is_dirty: bool,
 
-	/// Unsure what this means
-	pub is_dirty: bool,
+    /// Where the configuration is stored
+    pub location: ConfigurationLocation,
 
-	/// Where the configuration is stored
-	pub location: ConfigurationLocation,
+    /// Name of the configuration
+    pub name: String,
 
-	/// Name of the configuration
-	pub name: String,
-
-	/// 0 by default, likely set to some value if location is Resource
-	pub resource_id: i32,
+    /// 0 by default, likely set to some value if location is Resource
+    pub resource_id: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 /// Where the configuration is stored
 pub enum ConfigurationLocation {
-	None,
-	LocalStorage,
-	Resource
+    None,
+    LocalStorage,
+    Resource,
 }

@@ -64,6 +64,9 @@ pub struct App {
     /// The auto opmode from the user currently has selected
     pub auto_list_selected_index: usize,
 
+    /// Number of lines scrolled in the telemetry display
+    pub telemetry_display_scroll: u16,
+
     /// Handle of our gamepad input handler
     pub gilrs: Gilrs,
     pub gamepad_one: Arc<RwLock<Option<Gamepad>>>,
@@ -97,21 +100,21 @@ impl App {
                     source: None,
                     system_opmode_display_name: None,
                 },
-					 OpModeData {
+                OpModeData {
                     name: "Autonomous".to_string(),
                     group: "jože".to_string(),
                     flavor: OpModeFlavor::Autonomous,
                     source: None,
                     system_opmode_display_name: None,
                 },
-					 OpModeData {
+                OpModeData {
                     name: "CoolerAutonomous".to_string(),
                     group: "jože".to_string(),
                     flavor: OpModeFlavor::Autonomous,
                     source: None,
                     system_opmode_display_name: None,
                 },
-					 OpModeData {
+                OpModeData {
                     name: "Bautonomous".to_string(),
                     group: DEFAULT_OPMODE_GROUP.to_string(),
                     flavor: OpModeFlavor::Autonomous,
@@ -119,11 +122,32 @@ impl App {
                     system_opmode_display_name: None,
                 },
             ]),
-            active_opmode: OPMODE_STOP.to_string(),
+            active_opmode: "Bautonomous".to_string(),
             error_message: None,
             warning_message: Some(String::from("Test warning message")),
             battery_voltage: Some(12.3),
             last_battery_update: std::time::Instant::now(),
+            telemetry_list: vec![
+                "leftY : 0".to_string(),
+                "leftX : 0".to_string(),
+                "rightX : 0".to_string(),
+                "left front : -667".to_string(),
+                "left back : 0".to_string(),
+                "right front : -737".to_string(),
+                "right back : 310".to_string(),
+                "rokaLeft : -67".to_string(),
+                "rokaRight : 67".to_string(),
+                "wanted location before : 0".to_string(),
+                "power to set : 0".to_string(),
+                "left position : 982".to_string(),
+                "lifterLeft : 982".to_string(),
+                "lifterRight : 983".to_string(),
+                "wantedlocation : 984.428".to_string(),
+                "L:  : 0".to_string(),
+                "D:  : -0".to_string(),
+                "claw wanted position : 1".to_string(),
+                "curent position : 1".to_string(),
+            ],
         }));
 
         let gamepad_one = Arc::new(RwLock::new(None));
@@ -145,6 +169,7 @@ impl App {
             robot,
             teleop_list_selected_index: 0,
             auto_list_selected_index: 0,
+            telemetry_display_scroll: 0,
             gilrs: Gilrs::new().unwrap(),
             gamepad_one,
             gamepad_two,

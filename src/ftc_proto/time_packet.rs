@@ -27,7 +27,7 @@ impl Writeable for TimePacketData {
     fn write_to(&self, buffer: &mut Vec<u8>) {
         self.timestamp.write_to(buffer);
 
-		  let op_mode_state: i8 = self.robot_op_mode_state.into();
+        let op_mode_state: i8 = self.robot_op_mode_state.into();
 
         op_mode_state.write_to(buffer);
         self.unix_millis_sent.write_to(buffer);
@@ -62,14 +62,27 @@ impl Readable for TimePacketData {
     }
 }
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Eq, PartialOrd, Ord, IntoPrimitive, FromPrimitive, Clone, Copy, Debug, Default)]
+#[derive(
+    Serialize_repr,
+    Deserialize_repr,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    IntoPrimitive,
+    FromPrimitive,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+)]
 #[repr(i8)]
 pub enum RobotOpmodeState {
-	#[default]
-	Unknown = -1,
-	NotStarted = 0,
-	Initialized = 1,
-	Running = 2,
-	Stopped = 3,
-	EmergencyStopped = 4,
+    #[default]
+    Unknown = -1,
+    NotStarted = 0,
+    Initialized = 1,
+    Running = 2,
+    Stopped = 3,
+    EmergencyStopped = 4,
 }

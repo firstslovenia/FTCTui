@@ -4,12 +4,19 @@ use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::{
-    app::{get_timestamp_millis, AUTO_BLOCK_ID, GAMEPADS_BLOCK_ID, TELEOP_BLOCK_ID}, ftc_dashboard::{gamepad_state::GamepadState, message::Message, robot_status::OpModeStatus}, ftc_proto::{
-        gamepad_packet::{ButtonFlags, GamepadPacketData, GAMEPAD_TYPE_UNKNOWN},
+    App,
+    app::{
+        ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, GAMEPADS_BLOCK_ID, TELEOP_BLOCK_ID,
+        get_timestamp_millis,
+    },
+    ftc_dashboard::{gamepad_state::GamepadState, message::Message, robot_status::OpModeStatus},
+    ftc_proto::{
+        gamepad_packet::{ButtonFlags, GAMEPAD_TYPE_UNKNOWN, GamepadPacketData},
         packet::{Packet, PacketType},
-        robot_command::{RobotCommandPacketData, INIT_OPMODE, OPMODE_STOP, RUN_OPMODE},
+        robot_command::{INIT_OPMODE, OPMODE_STOP, RUN_OPMODE, RobotCommandPacketData},
         time_packet::RobotOpmodeState,
-    }, network::send_packet, App
+    },
+    network::send_packet,
 };
 
 use gilrs::{Axis, Button, GamepadId, Gilrs};
@@ -139,6 +146,11 @@ impl App {
                         self.teleop_list_selected_index -= 1;
                     }
                 }
+                ACTIVE_OPMODE_BLOCK_ID => {
+                    if self.telemetry_display_scroll != 0 {
+                        self.telemetry_display_scroll -= 1;
+                    }
+                }
                 _ => {}
             },
 
@@ -171,6 +183,19 @@ impl App {
                         self.teleop_list_selected_index = 0;
                     } else {
                         self.teleop_list_selected_index += 1;
+                    }
+                }
+                ACTIVE_OPMODE_BLOCK_ID => {
+                    let mut max_index = 0;
+
+                    let telemetry_lines_len = self.robot.read().await.telemetry_list.len();
+
+                    if !telemetry_lines_len != 0 {
+                        max_index = telemetry_lines_len - 1;
+                    }
+
+                    if self.telemetry_display_scroll != max_index as u16 {
+                        self.telemetry_display_scroll += 1;
                     }
                 }
                 _ => {}

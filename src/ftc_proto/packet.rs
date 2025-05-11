@@ -23,12 +23,11 @@ impl Packet {
 
     /// Creates a packet from the packet type and any writable data
     pub fn from_packet_type_and_writable(packet_type: PacketType, data: &impl Writeable) -> Packet {
+        let mut data_buffer = Vec::new();
 
-		  let mut data_buffer = Vec::new();
+        data.write_to(&mut data_buffer);
 
-		  data.write_to(&mut data_buffer);
-
-		  Self::from_packet_type_and_bytes(packet_type, data_buffer)
+        Self::from_packet_type_and_bytes(packet_type, data_buffer)
     }
 }
 
