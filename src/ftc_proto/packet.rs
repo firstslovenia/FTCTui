@@ -3,6 +3,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use super::traits::{Readable, Writeable};
 
 /// Base structure of all packets
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Packet {
     pub packet_type: PacketType,
     /// Is there for most packets, expect for Heartbeat

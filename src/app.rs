@@ -7,14 +7,11 @@ use ratatui::DefaultTerminal;
 use tokio::{net::UdpSocket, sync::RwLock};
 
 use crate::{
-    ftc_proto::{
-        packet::{Packet, PacketType},
-        robot_command::{
-            INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE, RobotCommandPacketData,
-        },
+    ftc_proto::robot_command::{
+        CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
     },
     input::Gamepad,
-    network::{NetworkDebugData, send_packet},
+    network::{SharedNetworkData, send_command},
     robot::Robot,
 };
 
@@ -42,8 +39,8 @@ pub struct App {
     /// A Shared Socket to send messages to the robot
     pub socket: Arc<UdpSocket>,
 
-    /// Network debug data
-    pub network_debug_data: Arc<RwLock<NetworkDebugData>>,
+    /// Shared network data
+    pub shared_network_data: Arc<RwLock<SharedNetworkData>>,
 
     /// The main "block" the user has selected, going from the top left to the bottom right
     pub selected_block: u8,
@@ -81,7 +78,7 @@ impl App {
 
         App {
             socket,
-            network_debug_data,
+            shared_network_data: network_debug_data,
             running: false,
             selected_block: 1,
             robot,
@@ -177,51 +174,45 @@ impl App {
 
     /// Starts an opmode with the given name
     pub async fn start_opmode(&self, opmode: String) {
-        send_packet(
+        send_command(
             &self.socket,
-            Packet::from_packet_type_and_writable(
-                PacketType::Command,
-                &RobotCommandPacketData {
-                    acknowledged: false,
-                    command: RUN_OPMODE.to_string(),
-                    data: opmode,
-                    timestamp: get_timestamp_nanos(),
-                },
-            ),
+            CommandPacketData {
+                acknowledged: false,
+                command: RUN_OPMODE.to_string(),
+                data: opmode,
+                timestamp: get_timestamp_nanos(),
+            },
+            self.shared_network_data.clone(),
         )
         .await;
     }
 
     /// Inits an opmode with the given name
     pub async fn init_opmode(&self, opmode: String) {
-        send_packet(
+        send_command(
             &self.socket,
-            Packet::from_packet_type_and_writable(
-                PacketType::Command,
-                &RobotCommandPacketData {
-                    acknowledged: false,
-                    command: INIT_OPMODE.to_string(),
-                    data: opmode,
-                    timestamp: get_timestamp_nanos(),
-                },
-            ),
+            CommandPacketData {
+                acknowledged: false,
+                command: INIT_OPMODE.to_string(),
+                data: opmode,
+                timestamp: get_timestamp_nanos(),
+            },
+            self.shared_network_data.clone(),
         )
         .await;
     }
 
     /// Stops the current opmode
     pub async fn stop_opmode(&self) {
-        send_packet(
+        send_command(
             &self.socket,
-            Packet::from_packet_type_and_writable(
-                PacketType::Command,
-                &RobotCommandPacketData {
-                    acknowledged: false,
-                    command: INIT_OPMODE.to_string(),
-                    data: OPMODE_STOP.to_string(),
-                    timestamp: get_timestamp_nanos(),
-                },
-            ),
+            CommandPacketData {
+                acknowledged: false,
+                command: INIT_OPMODE.to_string(),
+                data: OPMODE_STOP.to_string(),
+                timestamp: get_timestamp_nanos(),
+            },
+            self.shared_network_data.clone(),
         )
         .await;
     }

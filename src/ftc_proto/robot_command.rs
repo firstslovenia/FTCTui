@@ -4,7 +4,7 @@ use super::traits::{Readable, Writeable, read_string_from};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Data structure of a Robot Command Packet
-pub struct RobotCommandPacketData {
+pub struct CommandPacketData {
     /// Apparently in nanoseconds (System.nanoTime())
     ///
     /// eg. 9336809990439
@@ -18,7 +18,7 @@ pub struct RobotCommandPacketData {
     pub data: String,
 }
 
-impl Writeable for RobotCommandPacketData {
+impl Writeable for CommandPacketData {
     fn write_to(&self, buffer: &mut Vec<u8>) {
         self.timestamp.write_to(buffer);
         self.acknowledged.write_to(buffer);
@@ -35,7 +35,7 @@ impl Writeable for RobotCommandPacketData {
     }
 }
 
-impl Readable for RobotCommandPacketData {
+impl Readable for CommandPacketData {
     fn read_from(buffer: &mut Vec<u8>) -> Option<Self>
     where
         Self: Sized,
@@ -52,7 +52,7 @@ impl Readable for RobotCommandPacketData {
             data = read_string_from(buffer, data_len as usize)?;
         }
 
-        Some(RobotCommandPacketData {
+        Some(CommandPacketData {
             timestamp,
             acknowledged,
             command,

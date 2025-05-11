@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
@@ -5,9 +7,10 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Padding, Paragraph, Wrap},
 };
+use serde_json::to_string;
 use styles::{
-    ERROR_COLOR, MUTED_TEXT_COLOR, PRIMARY_COLOR_LIGHTER, SELECTED_BACKGROUND, SUCCESS_COLOR,
-    TEXT_COLOR, WARNING_COLOR, block_style, selected_block_style,
+    ERROR_COLOR, MUTED_TEXT_COLOR, PRIMARY_COLOR, PRIMARY_COLOR_LIGHTER, SELECTED_BACKGROUND,
+    SUCCESS_COLOR, TEXT_COLOR, WARNING_COLOR, block_style, selected_block_style,
 };
 
 use crate::{
@@ -17,6 +20,7 @@ use crate::{
         TELEOP_BLOCK_ID,
     },
     ftc_proto::{gamepad_packet::ButtonFlags, time_packet::RobotOpmodeState},
+    network::NetworkStatus,
 };
 
 pub mod styles;
@@ -45,7 +49,10 @@ impl App {
             Layout::horizontal([Constraint::Ratio(3, 4), Constraint::Fill(1)])
                 .split(main_layout[1]);
 
-        let mut debug_block = Block::bordered().title("Debug").border_style(block_style());
+        let mut debug_block = Block::bordered()
+            .title("Debug")
+            .border_style(block_style())
+            .padding(Padding::new(2, 2, 1, 1));
 
         let mut teleop_block = Block::bordered()
             .title("Teleop opmodes")
@@ -115,13 +122,8 @@ impl App {
         frame.render_widget(&gamepads_block, bottom_inner_layout[1]);
 
         frame.render_widget(
-            self.create_gamepads_paragraph().await,
-            gamepads_block.inner(bottom_inner_layout[1]),
-        );
-
-        frame.render_widget(
-            self.create_robot_paragraph().await,
-            robot_block.inner(top_inner_layout[3]),
+            self.create_debug_paragraph().await,
+            debug_block.inner(top_inner_layout[0]),
         );
 
         frame.render_widget(
@@ -135,8 +137,18 @@ impl App {
         );
 
         frame.render_widget(
+            self.create_robot_paragraph().await,
+            robot_block.inner(top_inner_layout[3]),
+        );
+
+        frame.render_widget(
             self.create_active_opmode_paragraph().await,
             active_opmode_block.inner(bottom_inner_layout[0]),
+        );
+
+        frame.render_widget(
+            self.create_gamepads_paragraph().await,
+            gamepads_block.inner(bottom_inner_layout[1]),
         );
     }
 
@@ -429,6 +441,51 @@ impl App {
         }
 
         Paragraph::new(robot_text).wrap(Wrap { trim: false })
+    }
+
+    /// Creates the debug text
+    pub async fn create_debug_paragraph(&mut self) -> Paragraph {
+        let mut debug_text: Vec<Line> = Vec::new();
+
+        let shared_network_read = self.shared_network_data.read().await;
+
+        let mut network_state_line = Vec::new();
+
+        network_state_line.push(Span::styled(
+            "Network status: ".to_string(),
+            Style::new().fg(MUTED_TEXT_COLOR),
+        ));
+
+        match shared_network_read.state {
+            NetworkStatus::Establishing => network_state_line.push(Span::styled(
+                "Establishing..".to_string(),
+                Style::new().fg(WARNING_COLOR),
+            )),
+            NetworkStatus::Disconnected => network_state_line.push(Span::styled(
+                "Disconnected.".to_string(),
+                Style::new().fg(ERROR_COLOR),
+            )),
+            NetworkStatus::Connected => network_state_line.push(Span::styled(
+                "Connected!".to_string(),
+                Style::new().fg(SUCCESS_COLOR),
+            )),
+        }
+
+        debug_text.push(Line::from(network_state_line));
+
+        debug_text.push(Line::from(vec![
+            Span::styled(
+                "Last packet was ".to_string(),
+                Style::new().fg(MUTED_TEXT_COLOR),
+            ),
+            Span::styled(
+                format!("{:.1?}", shared_network_read.last_received.elapsed()),
+                Style::new().fg(TEXT_COLOR),
+            ),
+            Span::styled(" ago".to_string(), Style::new().fg(MUTED_TEXT_COLOR)),
+        ]));
+
+        Paragraph::new(debug_text).wrap(Wrap { trim: false })
     }
 
     /// Creates the teleop opmode list

@@ -14,7 +14,7 @@ pub mod test_deserializer {
         gamepad_packet::GamepadPacketData,
         heartbeat_packet::HeartbeatPacketData,
         packet::{Packet, PacketType},
-        robot_command::RobotCommandPacketData,
+        robot_command::CommandPacketData,
         telemetry_packet::TelemetryPacketData,
         time_packet::TimePacketData,
         traits::Readable,
@@ -64,7 +64,7 @@ pub mod test_deserializer {
                             }
                         },
                         PacketType::Command => {
-                            match RobotCommandPacketData::read_from(&mut packet.data) {
+                            match CommandPacketData::read_from(&mut packet.data) {
                                 None => {
                                     println!("Failed to read {} as command packet!", i);
                                 }

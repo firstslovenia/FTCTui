@@ -10,9 +10,9 @@ use crate::{
         heartbeat_packet::HeartbeatPacketData,
         packet::{Packet, PacketType},
         robot_command::{
-            NOTIFY_ACTIVE_CONFIGURATION, NOTIFY_INIT_OPMODE, NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES,
-            NOTIFY_RUN_OPMODE, OpModeData, REQUEST_ACTIVE_CONFIGURATION, REQUEST_OP_MODES,
-            RobotCommandPacketData, RobotConfiguration,
+            CommandPacketData, NOTIFY_ACTIVE_CONFIGURATION, NOTIFY_INIT_OPMODE,
+            NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES, NOTIFY_RUN_OPMODE, OpModeData,
+            REQUEST_ACTIVE_CONFIGURATION, REQUEST_OP_MODES, RobotConfiguration,
         },
         telemetry_packet::{
             ROBOT_BATTERY_LEVEL_KEY, ROBOT_CONTROLLER_BATTERY_STATUS_KEY, SYSTEM_ERROR_KEY,
@@ -29,10 +29,24 @@ use tokio::{net::UdpSocket, sync::RwLock};
 // Todo: potentially randomly generate this?
 pub static SEQUENCE_NUMBER: AtomicI16 = AtomicI16::new(0);
 
+/// How long to wait before retransmitting packets that we didn't get an ack for
+pub const RETRANSMISSION_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// How long to wait before saying the connection is dead
+pub const CONNECTION_TIMEOUT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(2000);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Debug data shared from the network thread
-pub struct NetworkDebugData {
+pub struct SharedNetworkData {
     pub state: NetworkStatus,
+
+    /// Packets that we sent but didn't receive a response to
+    ///
+    /// In format of (Packet, last transmission, number of times we transmitted it)
+    pub unacknowledged_command_packets: Vec<((i16, CommandPacketData), std::time::Instant, u8)>,
+
+    /// The last time we received a packet
+    pub last_received: std::time::Instant,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,12 +57,38 @@ pub enum NetworkStatus {
     Disconnected,
 }
 
-/// Attempts to send a packet to the remote socket, first setting its sequence
+/// Sends a command to the remote socket, setting its sequence
+/// number if and storing it if it we expect a response
+pub async fn send_command(
+    socket: &Arc<UdpSocket>,
+    command: CommandPacketData,
+    network_data: Arc<RwLock<SharedNetworkData>>,
+) {
+    let mut packet = Packet::from_packet_type_and_writable(PacketType::Command, &command);
+
+    let sequence_number = SEQUENCE_NUMBER.load(Ordering::Relaxed);
+
+    packet.sequence_number = Some(sequence_number);
+
+    SEQUENCE_NUMBER.fetch_add(1, Ordering::SeqCst);
+
+    log::debug!("Sending command {}", command.command);
+
+    send_packet(socket, packet).await;
+
+    network_data
+        .write()
+        .await
+        .unacknowledged_command_packets
+        .push(((sequence_number, command), std::time::Instant::now(), 0));
+}
+
+/// Attempts to send a packet to the remote socket, setting its sequence
 /// number if needed and incrementing it
+///
+/// does not use the store
 pub async fn send_packet(socket: &Arc<UdpSocket>, packet: Packet) {
     let mut packet = packet;
-
-    let mut buffer = Vec::new();
 
     if packet.packet_type != PacketType::Heartbeat {
         packet.sequence_number = Some(SEQUENCE_NUMBER.load(Ordering::Relaxed));
@@ -56,14 +96,21 @@ pub async fn send_packet(socket: &Arc<UdpSocket>, packet: Packet) {
         SEQUENCE_NUMBER.fetch_add(1, Ordering::SeqCst);
     }
 
+    send_packet_without_seq(socket, packet).await;
+}
+
+/// Attempts to send a packet to the remote socket, without setting its sequence number
+pub async fn send_packet_without_seq(socket: &Arc<UdpSocket>, packet: Packet) {
+    let mut buffer = Vec::new();
+
     packet.write_to(&mut buffer);
 
-    log::trace!(
+    /*log::trace!(
         "Sending {:?} (seq {:?}, {} bytes of data)",
         packet.packet_type,
         packet.sequence_number,
         packet.data.len()
-    );
+    );*/
 
     send_bytes(socket, buffer).await;
 }
@@ -84,7 +131,7 @@ pub async fn send_bytes(socket: &Arc<UdpSocket>, bytes: Vec<u8>) {
 
 pub struct NetworkHandler {
     pub socket: Arc<UdpSocket>,
-    pub debug: Arc<RwLock<NetworkDebugData>>,
+    pub shared_data: Arc<RwLock<SharedNetworkData>>,
     pub robot: Arc<RwLock<Robot>>,
     pub gamepad_one: Arc<RwLock<Option<Gamepad>>>,
     pub gamepad_two: Arc<RwLock<Option<Gamepad>>>,
@@ -96,7 +143,7 @@ pub async fn start_network_thread(
     robot: Arc<RwLock<Robot>>,
     gamepad_one: Arc<RwLock<Option<Gamepad>>>,
     gamepad_two: Arc<RwLock<Option<Gamepad>>>,
-) -> (Arc<RwLock<NetworkDebugData>>, Arc<UdpSocket>) {
+) -> (Arc<RwLock<SharedNetworkData>>, Arc<UdpSocket>) {
     log::debug!("Trying to connect to {}..", remote_addr);
 
     let sock = UdpSocket::bind("0.0.0.0:20884")
@@ -113,14 +160,16 @@ pub async fn start_network_thread(
 
     let sock = common_socket.clone();
 
-    let debug = Arc::new(RwLock::new(NetworkDebugData {
+    let debug = Arc::new(RwLock::new(SharedNetworkData {
         state: NetworkStatus::Establishing,
+        unacknowledged_command_packets: Vec::new(),
+        last_received: std::time::Instant::now(),
     }));
 
     let debug_copy = debug.clone();
 
     let mut network_handler = NetworkHandler {
-        debug: debug_copy,
+        shared_data: debug_copy,
         socket: sock,
         robot,
         gamepad_one,
@@ -141,6 +190,7 @@ impl NetworkHandler {
         let mut last_gamepad_update = std::time::Instant::now();
         let mut last_time_request_packet = std::time::Instant::now();
         let mut last_heartbeat_request_packet = std::time::Instant::now();
+        let mut last_retransmit_check = std::time::Instant::now();
 
         let mut last_gamepad_1_packet = GamepadPacketData::default_for_user(1);
         let mut last_gamepad_2_packet = GamepadPacketData::default_for_user(2);
@@ -156,37 +206,42 @@ impl NetworkHandler {
         //
         // The official client also requests the hardware configuration, but we haven't implemented
         // that yet
-        send_packet(
+        send_command(
             &self.socket,
-            Packet::from_packet_type_and_writable(
-                PacketType::Command,
-                &RobotCommandPacketData {
-                    data: String::new(),
-                    command: REQUEST_OP_MODES.to_string(),
-                    timestamp: get_timestamp_nanos(),
-                    acknowledged: false,
-                },
-            ),
+            CommandPacketData {
+                data: String::new(),
+                command: REQUEST_OP_MODES.to_string(),
+                timestamp: get_timestamp_nanos(),
+                acknowledged: false,
+            },
+            self.shared_data.clone(),
         )
         .await;
 
-        send_packet(
+        send_command(
             &self.socket,
-            Packet::from_packet_type_and_writable(
-                PacketType::Command,
-                &RobotCommandPacketData {
-                    data: String::new(),
-                    command: REQUEST_ACTIVE_CONFIGURATION.to_string(),
-                    timestamp: get_timestamp_nanos(),
-                    acknowledged: false,
-                },
-            ),
+            CommandPacketData {
+                data: String::new(),
+                command: REQUEST_ACTIVE_CONFIGURATION.to_string(),
+                timestamp: get_timestamp_nanos(),
+                acknowledged: false,
+            },
+            self.shared_data.clone(),
         )
         .await;
 
         loop {
             // Clear the receive buffer, so we can once again receive data into it
             recv_buffer = [0; RECEIVE_BUFFER_SIZE];
+
+            // Check network status
+            let mut shared_write = self.shared_data.write().await;
+
+            if shared_write.last_received.elapsed() >= CONNECTION_TIMEOUT_INTERVAL {
+                shared_write.state = NetworkStatus::Disconnected;
+            }
+
+            drop(shared_write);
 
             tokio::select! {
                 num_bytes_option = self.socket.recv(&mut recv_buffer) => {
@@ -198,6 +253,12 @@ impl NetworkHandler {
                         }
 
                         let mut vec_buffer = recv_buffer[0..num_bytes].to_vec();
+
+                        // Update network status
+                        let mut shared_write = self.shared_data.write().await;
+                        shared_write.last_received = std::time::Instant::now();
+                        shared_write.state = NetworkStatus::Connected;
+                        drop(shared_write);
 
                         match Packet::read_from(&mut vec_buffer) {
                             Some(packet) => {
@@ -225,7 +286,7 @@ impl NetworkHandler {
                                                 log::debug!("Received heartbeat packet (sequence number {}), robot is running on sdk from {}/{} on {}.{}", data.sequence_number, data.sdk_build_month, data.sdk_build_year, data.sdk_major_version, data.sdk_minor_version);
                                              }
                                              PacketType::Command => {
-                                                let Some(data) = RobotCommandPacketData::read_from(&mut vec_buffer) else {
+                                                let Some(data) = CommandPacketData::read_from(&mut vec_buffer) else {
                                                                     log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
                                                                     continue;
                                                 };
@@ -234,7 +295,7 @@ impl NetworkHandler {
 
                                              }
                                              PacketType::Telemetry => {
-                                                 let Some(data) = RobotCommandPacketData::read_from(&mut vec_buffer) else {
+                                                 let Some(data) = CommandPacketData::read_from(&mut vec_buffer) else {
                                                     log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
                                                                     continue;
                                                 };
@@ -310,13 +371,58 @@ impl NetworkHandler {
 
                     last_heartbeat_request_packet = std::time::Instant::now();
                 }
+
+                _ = tokio::time::sleep_until((last_retransmit_check + std::time::Duration::from_millis(10)).into()) => {
+                        let mut shared_write = self.shared_data.write().await;
+
+                                // If we're disconnected, don't bother
+                                if shared_write.state == NetworkStatus::Disconnected {
+                                    last_retransmit_check = std::time::Instant::now();
+                                    continue;
+                                }
+
+                        let mut packet_i = 0;
+
+                        for mut _j in 0..shared_write.unacknowledged_command_packets.len() {
+
+                            let Some(packet) = shared_write.unacknowledged_command_packets.get_mut(packet_i) else {
+                                break;
+                            };
+
+                            if packet.2 >= 10 {
+                                log::warn!("Giving up on command packet ({}), sent it 10x with no response", packet.0.1.command);
+
+                                let _ = shared_write.unacknowledged_command_packets.remove(packet_i);
+
+                                // Check the same index again, since it's a different entry now
+                                continue;
+                            }
+
+                            if packet.1.elapsed() >= RETRANSMISSION_INTERVAL {
+                                log::info!("Retransmitting {} command packet, since we got no response (x{})", packet.0.1.command, packet.2);
+
+                                          // Transmit with the same sequence number
+                                          let mut new_packet = Packet::from_packet_type_and_writable(PacketType::Command, &packet.0.1);
+                                          new_packet.sequence_number = Some(packet.0.0);
+
+                                send_packet_without_seq(&self.socket, new_packet).await;
+
+                                          packet.1 = std::time::Instant::now();
+                                          packet.2 += 1;
+                            }
+
+                            packet_i += 1;
+                        }
+
+                        last_retransmit_check = std::time::Instant::now();
+                     }
             }
         }
 
         log::error!("Closing network thread..");
 
         drop(self.socket);
-        self.debug.write().await.state = NetworkStatus::Disconnected;
+        self.shared_data.write().await.state = NetworkStatus::Disconnected;
     }
 
     /// Handles receiving a telemetry packet
@@ -460,11 +566,29 @@ impl NetworkHandler {
     }
 
     /// Handles receiving a command packet
-    pub async fn handle_command_packet(&mut self, packet: RobotCommandPacketData) {
+    pub async fn handle_command_packet(&mut self, packet: CommandPacketData) {
         if packet.acknowledged {
             log::debug!("Received acknowledge for command {}", packet.command);
 
-            // todo: properly handle this
+            let mut shared_debug = self.shared_data.write().await;
+
+            let mut i = 0;
+
+            for _j in 0..shared_debug.unacknowledged_command_packets.len() {
+                let Some(old_packet) = shared_debug.unacknowledged_command_packets.get(i) else {
+                    break;
+                };
+
+                if old_packet.0.1.command == packet.command {
+                    log::debug!("{} command ACK by the server", old_packet.0.1.command);
+
+                    let _ = shared_debug.unacknowledged_command_packets.remove(i);
+                    continue;
+                }
+
+                i += 1;
+            }
+
             return;
         }
 
@@ -475,7 +599,7 @@ impl NetworkHandler {
             &self.socket,
             Packet::from_packet_type_and_writable(
                 PacketType::Command,
-                &RobotCommandPacketData {
+                &CommandPacketData {
                     command: packet.command.clone(),
                     acknowledged: true,
                     data: String::new(),
