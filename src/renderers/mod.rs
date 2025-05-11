@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
@@ -7,10 +5,9 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Padding, Paragraph, Wrap},
 };
-use serde_json::to_string;
 use styles::{
-    ERROR_COLOR, MUTED_TEXT_COLOR, PRIMARY_COLOR, PRIMARY_COLOR_LIGHTER, SELECTED_BACKGROUND,
-    SUCCESS_COLOR, TEXT_COLOR, WARNING_COLOR, block_style, selected_block_style,
+    ERROR_COLOR, MUTED_TEXT_COLOR, PRIMARY_COLOR_LIGHTER, SELECTED_BACKGROUND, SUCCESS_COLOR,
+    TEXT_COLOR, WARNING_COLOR, block_style, selected_block_style,
 };
 
 use crate::{
@@ -473,17 +470,30 @@ impl App {
 
         debug_text.push(Line::from(network_state_line));
 
-        debug_text.push(Line::from(vec![
-            Span::styled(
-                "Last packet was ".to_string(),
-                Style::new().fg(MUTED_TEXT_COLOR),
-            ),
-            Span::styled(
-                format!("{:.1?}", shared_network_read.last_received.elapsed()),
+        let mut last_packet_line = Vec::new();
+
+        last_packet_line.push(Span::styled(
+            "Last packet was ".to_string(),
+            Style::new().fg(MUTED_TEXT_COLOR),
+        ));
+
+        if let Some(last_packet) = shared_network_read.last_received {
+            last_packet_line.push(Span::styled(
+                format!("{:.1?}", last_packet.elapsed()),
                 Style::new().fg(TEXT_COLOR),
-            ),
-            Span::styled(" ago".to_string(), Style::new().fg(MUTED_TEXT_COLOR)),
-        ]));
+            ));
+            last_packet_line.push(Span::styled(
+                " ago".to_string(),
+                Style::new().fg(MUTED_TEXT_COLOR),
+            ));
+        } else {
+            last_packet_line.push(Span::styled(
+                "never".to_string(),
+                Style::new().fg(TEXT_COLOR),
+            ));
+        }
+
+        debug_text.push(Line::from(last_packet_line));
 
         Paragraph::new(debug_text).wrap(Wrap { trim: false })
     }

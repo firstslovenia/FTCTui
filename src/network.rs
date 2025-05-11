@@ -46,7 +46,7 @@ pub struct SharedNetworkData {
     pub unacknowledged_command_packets: Vec<((i16, CommandPacketData), std::time::Instant, u8)>,
 
     /// The last time we received a packet
-    pub last_received: std::time::Instant,
+    pub last_received: Option<std::time::Instant>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -163,7 +163,7 @@ pub async fn start_network_thread(
     let debug = Arc::new(RwLock::new(SharedNetworkData {
         state: NetworkStatus::Establishing,
         unacknowledged_command_packets: Vec::new(),
-        last_received: std::time::Instant::now(),
+        last_received: None,
     }));
 
     let debug_copy = debug.clone();
@@ -237,8 +237,10 @@ impl NetworkHandler {
             // Check network status
             let mut shared_write = self.shared_data.write().await;
 
-            if shared_write.last_received.elapsed() >= CONNECTION_TIMEOUT_INTERVAL {
-                shared_write.state = NetworkStatus::Disconnected;
+            if let Some(last_received) = shared_write.last_received {
+                if last_received.elapsed() >= CONNECTION_TIMEOUT_INTERVAL {
+                    shared_write.state = NetworkStatus::Disconnected;
+                }
             }
 
             drop(shared_write);
@@ -256,7 +258,7 @@ impl NetworkHandler {
 
                         // Update network status
                         let mut shared_write = self.shared_data.write().await;
-                        shared_write.last_received = std::time::Instant::now();
+                        shared_write.last_received = Some(std::time::Instant::now());
                         shared_write.state = NetworkStatus::Connected;
                         drop(shared_write);
 
@@ -375,11 +377,11 @@ impl NetworkHandler {
                 _ = tokio::time::sleep_until((last_retransmit_check + std::time::Duration::from_millis(10)).into()) => {
                         let mut shared_write = self.shared_data.write().await;
 
-                                // If we're disconnected, don't bother
-                                if shared_write.state == NetworkStatus::Disconnected {
+                         // If we're disconnected, don't bother
+                         if shared_write.state == NetworkStatus::Disconnected {
                                     last_retransmit_check = std::time::Instant::now();
-                                    continue;
-                                }
+                           continue;
+                         }
 
                         let mut packet_i = 0;
 
