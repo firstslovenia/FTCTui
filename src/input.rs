@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -9,14 +9,11 @@ use crate::{
         ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, GAMEPADS_BLOCK_ID, TELEOP_BLOCK_ID,
         get_timestamp_millis,
     },
-    ftc_dashboard::{gamepad_state::GamepadState, message::Message, robot_status::OpModeStatus},
     ftc_proto::{
         gamepad_packet::{ButtonFlags, GAMEPAD_TYPE_UNKNOWN, GamepadPacketData},
-        packet::{Packet, PacketType},
-        robot_command::{INIT_OPMODE, OPMODE_STOP, RUN_OPMODE, RobotCommandPacketData},
+        robot_command::OPMODE_STOP,
         time_packet::RobotOpmodeState,
     },
-    network::send_packet,
 };
 
 use gilrs::{Axis, Button, GamepadId, Gilrs};

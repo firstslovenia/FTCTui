@@ -1,27 +1,17 @@
 use std::{sync::Arc, time::SystemTime};
 
 use color_eyre::eyre::Result;
-use futures::SinkExt;
 use gilrs::Gilrs;
 use lazy_static::lazy_static;
 use ratatui::DefaultTerminal;
-use tokio::{
-    net::UdpSocket,
-    sync::{Mutex, RwLock},
-};
+use tokio::{net::UdpSocket, sync::RwLock};
 
 use crate::{
-    ftc_dashboard::{
-        message::Message,
-        robot_status::{OpModeStatus, RobotStatus},
-    },
     ftc_proto::{
         packet::{Packet, PacketType},
         robot_command::{
-            DEFAULT_OPMODE_GROUP, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
-            RobotCommandPacketData,
+            INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE, RobotCommandPacketData,
         },
-        time_packet::RobotOpmodeState,
     },
     input::Gamepad,
     network::{NetworkDebugData, send_packet},
@@ -76,79 +66,7 @@ pub struct App {
 impl App {
     /// Construct a new instance of [`App`].
     pub async fn new() -> Self {
-        let robot = Arc::new(RwLock::new(Robot {
-            active_opmode_state: Some(RobotOpmodeState::Running),
-            opmode_list: Some(vec![
-                OpModeData {
-                    name: OPMODE_STOP.to_string(),
-                    group: DEFAULT_OPMODE_GROUP.to_string(),
-                    flavor: OpModeFlavor::System,
-                    source: None,
-                    system_opmode_display_name: None,
-                },
-                OpModeData {
-                    name: "Robot".to_string(),
-                    group: DEFAULT_OPMODE_GROUP.to_string(),
-                    flavor: OpModeFlavor::Teleop,
-                    source: None,
-                    system_opmode_display_name: None,
-                },
-                OpModeData {
-                    name: "CoolerRobot".to_string(),
-                    group: DEFAULT_OPMODE_GROUP.to_string(),
-                    flavor: OpModeFlavor::Teleop,
-                    source: None,
-                    system_opmode_display_name: None,
-                },
-                OpModeData {
-                    name: "Autonomous".to_string(),
-                    group: "jože".to_string(),
-                    flavor: OpModeFlavor::Autonomous,
-                    source: None,
-                    system_opmode_display_name: None,
-                },
-                OpModeData {
-                    name: "CoolerAutonomous".to_string(),
-                    group: "jože".to_string(),
-                    flavor: OpModeFlavor::Autonomous,
-                    source: None,
-                    system_opmode_display_name: None,
-                },
-                OpModeData {
-                    name: "Bautonomous".to_string(),
-                    group: DEFAULT_OPMODE_GROUP.to_string(),
-                    flavor: OpModeFlavor::Autonomous,
-                    source: None,
-                    system_opmode_display_name: None,
-                },
-            ]),
-            active_opmode: "Bautonomous".to_string(),
-            error_message: None,
-            warning_message: Some(String::from("Test warning message")),
-            battery_voltage: Some(12.3),
-            last_battery_update: std::time::Instant::now(),
-            telemetry_list: vec![
-                "leftY : 0".to_string(),
-                "leftX : 0".to_string(),
-                "rightX : 0".to_string(),
-                "left front : -667".to_string(),
-                "left back : 0".to_string(),
-                "right front : -737".to_string(),
-                "right back : 310".to_string(),
-                "rokaLeft : -67".to_string(),
-                "rokaRight : 67".to_string(),
-                "wanted location before : 0".to_string(),
-                "power to set : 0".to_string(),
-                "left position : 982".to_string(),
-                "lifterLeft : 982".to_string(),
-                "lifterRight : 983".to_string(),
-                "wantedlocation : 984.428".to_string(),
-                "L:  : 0".to_string(),
-                "D:  : -0".to_string(),
-                "claw wanted position : 1".to_string(),
-                "curent position : 1".to_string(),
-            ],
-        }));
+        let robot = Arc::new(RwLock::new(Robot::new_fake()));
 
         let gamepad_one = Arc::new(RwLock::new(None));
         let gamepad_two = Arc::new(RwLock::new(None));
@@ -180,7 +98,7 @@ impl App {
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         self.running = true;
 
-        let mut last_frame = std::time::Instant::now();
+        let mut last_frame;
 
         while self.running {
             last_frame = std::time::Instant::now();
