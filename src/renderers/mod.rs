@@ -1,9 +1,9 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Padding, Paragraph, Wrap},
+    widgets::{Block, List, ListItem, Padding, Paragraph, Wrap},
 };
 use styles::{
     ERROR_COLOR, MUTED_TEXT_COLOR, PRIMARY_COLOR_LIGHTER, SELECTED_BACKGROUND, SUCCESS_COLOR,
@@ -111,8 +111,11 @@ impl App {
         }
 
         frame.render_widget(&debug_block, top_inner_layout[0]);
-        frame.render_widget(&teleop_block, top_inner_layout[1]);
-        frame.render_widget(&auto_block, top_inner_layout[2]);
+
+        // These two blocks are rendered in the list render function
+        //frame.render_widget(&teleop_block, top_inner_layout[1]);
+        //frame.render_widget(&auto_block, top_inner_layout[2]);
+
         frame.render_widget(&robot_block, top_inner_layout[3]);
 
         frame.render_widget(&active_opmode_block, bottom_inner_layout[0]);
@@ -123,15 +126,10 @@ impl App {
             debug_block.inner(top_inner_layout[0]),
         );
 
-        frame.render_widget(
-            self.create_teleop_list_paragraph().await,
-            teleop_block.inner(top_inner_layout[1]),
-        );
-
-        frame.render_widget(
-            self.create_auto_list_paragraph().await,
-            auto_block.inner(top_inner_layout[2]),
-        );
+        self.render_teleop_list(frame, teleop_block, top_inner_layout[1])
+            .await;
+        self.render_auto_list(frame, auto_block, top_inner_layout[2])
+            .await;
 
         frame.render_widget(
             self.create_robot_paragraph().await,
@@ -499,8 +497,13 @@ impl App {
     }
 
     /// Creates the teleop opmode list
-    pub async fn create_teleop_list_paragraph(&mut self) -> Paragraph {
-        let mut text: Vec<Line> = Vec::new();
+    pub async fn render_teleop_list(
+        &mut self,
+        frame: &mut Frame<'_>,
+        block: Block<'_>,
+        rect: Rect,
+    ) {
+        let mut items: Vec<ListItem> = Vec::new();
 
         let opmode_list = self.get_teleop_opmodes().await;
 
@@ -514,8 +517,8 @@ impl App {
         for i in 0..opmode_list.len() {
             let selected_opmode = opmode_list[i].clone();
 
-            let selected =
-                self.teleop_list_selected_index == i && self.selected_block == TELEOP_BLOCK_ID;
+            let selected = self.teleop_list_state.selected().unwrap_or_default() == i
+                && self.selected_block == TELEOP_BLOCK_ID;
 
             let mut style = if selected {
                 Style::new().fg(TEXT_COLOR).bg(SELECTED_BACKGROUND)
@@ -538,15 +541,19 @@ impl App {
                 }
             }
 
-            text.push(Line::from(Span::styled(selected_opmode.name, style)));
+            items.push(ListItem::new(Span::styled(selected_opmode.name, style)));
         }
 
-        Paragraph::new(text).wrap(Wrap { trim: false })
+        frame.render_stateful_widget(
+            List::new(items).block(block.clone()),
+            rect,
+            &mut self.teleop_list_state,
+        );
     }
 
     /// Creates the auto opmode list
-    pub async fn create_auto_list_paragraph(&mut self) -> Paragraph {
-        let mut text: Vec<Line> = Vec::new();
+    pub async fn render_auto_list(&mut self, frame: &mut Frame<'_>, block: Block<'_>, rect: Rect) {
+        let mut items: Vec<ListItem> = Vec::new();
 
         let opmode_list = self.get_auto_opmodes().await;
 
@@ -560,8 +567,8 @@ impl App {
         for i in 0..opmode_list.len() {
             let selected_opmode = opmode_list[i].clone();
 
-            let selected =
-                self.auto_list_selected_index == i && self.selected_block == AUTO_BLOCK_ID;
+            let selected = self.auto_list_state.selected().unwrap_or_default() == i
+                && self.selected_block == AUTO_BLOCK_ID;
 
             let mut style = if selected {
                 Style::new().fg(TEXT_COLOR).bg(SELECTED_BACKGROUND)
@@ -584,10 +591,14 @@ impl App {
                 }
             }
 
-            text.push(Line::from(Span::styled(selected_opmode.name, style)));
+            items.push(ListItem::new(Span::styled(selected_opmode.name, style)));
         }
 
-        Paragraph::new(text).wrap(Wrap { trim: false })
+        frame.render_stateful_widget(
+            List::new(items).block(block.clone()),
+            rect,
+            &mut self.auto_list_state,
+        );
     }
 
     /// Creates the active opmode / telemetry paragraph

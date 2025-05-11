@@ -114,34 +114,10 @@ impl App {
             // Move sub selection up and down
             (_, KeyCode::Up) | (_, KeyCode::Char('k')) => match self.selected_block {
                 AUTO_BLOCK_ID => {
-                    if self.auto_list_selected_index == 0 {
-                        let mut max_index = 0;
-
-                        let auto_modes = self.get_auto_opmodes().await;
-
-                        if !auto_modes.is_empty() {
-                            max_index = auto_modes.len() - 1;
-                        }
-
-                        self.auto_list_selected_index = max_index;
-                    } else {
-                        self.auto_list_selected_index -= 1;
-                    }
+                    self.auto_list_state.select_previous();
                 }
                 TELEOP_BLOCK_ID => {
-                    if self.teleop_list_selected_index == 0 {
-                        let mut max_index = 0;
-
-                        let teleop_modes = self.get_teleop_opmodes().await;
-
-                        if !teleop_modes.is_empty() {
-                            max_index = teleop_modes.len() - 1;
-                        }
-
-                        self.teleop_list_selected_index = max_index;
-                    } else {
-                        self.teleop_list_selected_index -= 1;
-                    }
+                    self.teleop_list_state.select_previous();
                 }
                 ACTIVE_OPMODE_BLOCK_ID => {
                     if self.telemetry_display_scroll != 0 {
@@ -153,34 +129,10 @@ impl App {
 
             (_, KeyCode::Down) | (_, KeyCode::Char('j')) => match self.selected_block {
                 AUTO_BLOCK_ID => {
-                    let mut max_index = 0;
-
-                    let auto_modes = self.get_auto_opmodes().await;
-
-                    if !auto_modes.is_empty() {
-                        max_index = auto_modes.len() - 1;
-                    }
-
-                    if self.auto_list_selected_index == max_index {
-                        self.auto_list_selected_index = 0;
-                    } else {
-                        self.auto_list_selected_index += 1;
-                    }
+                    self.auto_list_state.select_next();
                 }
                 TELEOP_BLOCK_ID => {
-                    let mut max_index = 0;
-
-                    let teleop_modes = self.get_teleop_opmodes().await;
-
-                    if !teleop_modes.is_empty() {
-                        max_index = teleop_modes.len() - 1;
-                    }
-
-                    if self.teleop_list_selected_index == max_index {
-                        self.teleop_list_selected_index = 0;
-                    } else {
-                        self.teleop_list_selected_index += 1;
-                    }
+                    self.teleop_list_state.select_next();
                 }
                 ACTIVE_OPMODE_BLOCK_ID => {
                     let mut max_index = 0;

@@ -3,7 +3,7 @@ use std::{sync::Arc, time::SystemTime};
 use color_eyre::eyre::Result;
 use gilrs::Gilrs;
 use lazy_static::lazy_static;
-use ratatui::DefaultTerminal;
+use ratatui::{DefaultTerminal, widgets::ListState};
 use tokio::{net::UdpSocket, sync::RwLock};
 
 use crate::{
@@ -46,10 +46,10 @@ pub struct App {
     pub selected_block: u8,
 
     /// The teleop opmode from the user currently has selected
-    pub teleop_list_selected_index: usize,
+    pub teleop_list_state: ListState,
 
     /// The auto opmode from the user currently has selected
-    pub auto_list_selected_index: usize,
+    pub auto_list_state: ListState,
 
     /// Number of lines scrolled in the telemetry display
     pub telemetry_display_scroll: u16,
@@ -82,8 +82,8 @@ impl App {
             running: false,
             selected_block: 1,
             robot,
-            teleop_list_selected_index: 0,
-            auto_list_selected_index: 0,
+            teleop_list_state: ListState::default().with_selected(Some(0)),
+            auto_list_state: ListState::default().with_selected(Some(0)),
             telemetry_display_scroll: 0,
             gilrs: Gilrs::new().unwrap(),
             gamepad_one,
@@ -160,13 +160,13 @@ impl App {
             TELEOP_BLOCK_ID => self
                 .get_teleop_opmodes()
                 .await
-                .get(self.teleop_list_selected_index)
+                .get(self.teleop_list_state.selected().unwrap_or_default())
                 .cloned(),
 
             AUTO_BLOCK_ID => self
                 .get_auto_opmodes()
                 .await
-                .get(self.auto_list_selected_index)
+                .get(self.auto_list_state.selected().unwrap_or_default())
                 .cloned(),
             _ => None,
         }
