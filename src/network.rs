@@ -263,24 +263,25 @@ impl NetworkHandler {
                         drop(shared_write);
 
                         match Packet::read_from(&mut vec_buffer) {
-                            Some(packet) => {
+                            Some(mut packet) => {
                                 match packet.packet_type {
                                              PacketType::Time => {
-                                                let Some(data) = TimePacketData::read_from(&mut vec_buffer) else {
+                                                let Some(data) = TimePacketData::read_from(&mut packet.data) else {
                                                     log::warn!("Failed to deserialize time packet: {:?}", recv_buffer[0..num_bytes].to_vec());
                                                                     continue;
                                                 };
 
                                                 log::debug!("Received time packet..");
 
-                                                self.robot.write().await.active_opmode_state = Some(data.robot_op_mode_state);
+                                                // This if fake!
+                                                //self.robot.write().await.active_opmode_state = Some(data.robot_op_mode_state);
                                              }
                                              PacketType::Gamepad => {
                                                 log::warn!("Received gamepad packet from the robot, the server is likely incredibly drunk");
                                                               continue;
                                              }
                                              PacketType::Heartbeat => {
-                                                let Some(data) = HeartbeatPacketData::read_from(&mut vec_buffer) else {
+                                                let Some(data) = HeartbeatPacketData::read_from(&mut packet.data) else {
                                                     log::warn!("Failed to deserialize heartbeat packet: {:?}", recv_buffer[0..num_bytes].to_vec());
                                                                     continue;
                                                 };
@@ -288,21 +289,24 @@ impl NetworkHandler {
                                                 log::debug!("Received heartbeat packet (sequence number {}), robot is running on sdk from {}/{} on {}.{}", data.sequence_number, data.sdk_build_month, data.sdk_build_year, data.sdk_major_version, data.sdk_minor_version);
                                              }
                                              PacketType::Command => {
-                                                let Some(data) = CommandPacketData::read_from(&mut vec_buffer) else {
+                                                let Some(data) = CommandPacketData::read_from(&mut packet.data) else {
                                                                     log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
                                                                     continue;
                                                 };
 
                                                 log::debug!("Received command packet ({:?})", data);
 
+                                                                self.handle_command_packet(data).await;
                                              }
                                              PacketType::Telemetry => {
-                                                 let Some(data) = CommandPacketData::read_from(&mut vec_buffer) else {
-                                                    log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                                                 let Some(data) = TelemetryPacketData::read_from(&mut packet.data) else {
+                                                    log::warn!("Failed to deserialize telemetry packet: {:?}", recv_buffer[0..num_bytes].to_vec());
                                                                     continue;
                                                 };
 
                                                 log::debug!("Received telemetry packet.. ({:?})", data);
+
+                                                                self.handle_telemetry_packet(data).await;
                                              }
                                 }
                             }
@@ -403,14 +407,14 @@ impl NetworkHandler {
                             if packet.1.elapsed() >= RETRANSMISSION_INTERVAL {
                                 log::info!("Retransmitting {} command packet, since we got no response (x{})", packet.0.1.command, packet.2);
 
-                                          // Transmit with the same sequence number
-                                          let mut new_packet = Packet::from_packet_type_and_writable(PacketType::Command, &packet.0.1);
-                                          new_packet.sequence_number = Some(packet.0.0);
+                                // Transmit with the same sequence number
+                                let mut new_packet = Packet::from_packet_type_and_writable(PacketType::Command, &packet.0.1);
+                                new_packet.sequence_number = Some(packet.0.0);
 
                                 send_packet_without_seq(&self.socket, new_packet).await;
 
-                                          packet.1 = std::time::Instant::now();
-                                          packet.2 += 1;
+                                packet.1 = std::time::Instant::now();
+                                packet.2 += 1;
                             }
 
                             packet_i += 1;
@@ -595,6 +599,8 @@ impl NetworkHandler {
         }
 
         log::info!("Received command {}", packet.command);
+
+        log::info!("Sending ACK..");
 
         // Send back an ackowledge for this
         send_packet(

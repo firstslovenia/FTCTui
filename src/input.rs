@@ -294,14 +294,8 @@ impl Gamepad {
             // Note: unideal, but we can't? get the analog value from gilrs
             left_trigger: gamepad.is_pressed(Button::LeftTrigger2) as u8 as f32,
             right_trigger: gamepad.is_pressed(Button::RightTrigger2) as u8 as f32,
-            gamepad_type: GAMEPAD_TYPE_UNKNOWN,
-            legacy_type: GAMEPAD_TYPE_UNKNOWN,
-            user,
             button_flags: flags.bits(),
-            touchpad_finger_1_x: 0.0,
-            touchpad_finger_1_y: 0.0,
-            touchpad_finger_2_x: 0.0,
-            touchpad_finger_2_y: 0.0,
+            ..GamepadPacketData::default_for_user(user)
         }
     }
 }

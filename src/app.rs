@@ -63,7 +63,7 @@ pub struct App {
 impl App {
     /// Construct a new instance of [`App`].
     pub async fn new() -> Self {
-        let robot = Arc::new(RwLock::new(Robot::new_fake()));
+        let robot = Arc::new(RwLock::new(Robot::new_empty()));
 
         let gamepad_one = Arc::new(RwLock::new(None));
         let gamepad_two = Arc::new(RwLock::new(None));

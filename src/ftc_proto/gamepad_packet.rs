@@ -41,7 +41,7 @@ impl GamepadPacketData {
     pub fn default_for_user(user: u8) -> GamepadPacketData {
         GamepadPacketData {
             // Note: not sure if this is what we can do, but eh smeh bleh
-            gamepad_id: user.into(),
+            gamepad_id: 2002,
             timestamp: 0,
             left_stick_x: 0.0,
             left_stick_y: 0.0,
@@ -51,8 +51,8 @@ impl GamepadPacketData {
             right_trigger: 0.0,
             button_flags: ButtonFlags::empty().bits(),
             user,
-            legacy_type: GAMEPAD_TYPE_UNKNOWN,
-            gamepad_type: GAMEPAD_TYPE_UNKNOWN,
+            legacy_type: GAMEPAD_TYPE_XBOX_360,
+            gamepad_type: GAMEPAD_TYPE_XBOX_360,
             touchpad_finger_1_x: 0.0,
             touchpad_finger_1_y: 0.0,
             touchpad_finger_2_x: 0.0,
