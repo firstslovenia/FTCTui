@@ -139,7 +139,7 @@ impl App {
 
                     let telemetry_lines_len = self.robot.read().await.telemetry_list.len();
 
-                    if !telemetry_lines_len != 0 {
+                    if telemetry_lines_len != 0 {
                         max_index = telemetry_lines_len - 1;
                     }
 
