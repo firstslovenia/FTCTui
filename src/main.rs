@@ -7,6 +7,7 @@ pub mod app;
 pub mod ftc_dashboard;
 pub mod ftc_proto;
 pub mod input;
+pub mod gamepad_map;
 pub mod r#match;
 pub mod network;
 pub mod renderers;

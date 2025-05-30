@@ -10,13 +10,16 @@ use crate::{
         get_timestamp_millis,
     },
     ftc_proto::{
-        gamepad_packet::{ButtonFlags, GAMEPAD_TYPE_UNKNOWN, GamepadPacketData},
+        gamepad_packet::{ButtonFlags, GamepadPacketData},
         robot_command::OPMODE_STOP,
         time_packet::RobotOpmodeState,
     },
+    gamepad_map::{AXIS_MAP, BUTTON_MAP, CUSTOM_MAP_NAME, UNKNOWN_CODE},
 };
 
-use gilrs::{Axis, Button, GamepadId, Gilrs};
+use gilrs::{Axis, Button, GamepadId, Gilrs, Mapping, MappingSource, ev::Code};
+
+static DEBUG_GILRS_EVENTS: bool = true;
 
 impl App {
     /// Reads the crossterm events and updates the state of [`App`].
@@ -176,7 +179,19 @@ impl App {
         }
 
         // Check for assigning new gamepads
-        for (id, _gamepad) in self.gilrs.gamepads() {
+        for (id, gamepad) in self.gilrs.gamepads() {
+            if gamepad.mapping_source() == MappingSource::None {
+                continue;
+            }
+
+            // Not a gamepad
+            if gamepad
+                .name()
+                .contains("Framework Laptop 16 Keyboard Module")
+            {
+                continue;
+            }
+
             if let Some(gamepad_one) = &*gamepad_one {
                 if gamepad_two.is_none() && gamepad_one.id != id {
                     *gamepad_two = Some(Gamepad {
@@ -194,10 +209,52 @@ impl App {
         }
 
         // TODO: update when we have an input!
-        while let Some(gilrs::Event {
-            id, event, time, ..
-        }) = self.gilrs.next_event()
-        {}
+        while let Some(event) = self.gilrs.next_event() {
+            if DEBUG_GILRS_EVENTS {
+                match event.event {
+                    gilrs::EventType::ButtonPressed(button, code) => {
+                        log::info!(
+                            "Event ButtonPresed: {:?} - code {}",
+                            button,
+                            serde_json::to_string(&code).unwrap()
+                        );
+                    }
+                    gilrs::EventType::ButtonRepeated(button, code) => {
+                        log::info!(
+                            "Event ButtonRepeated: {:?} - code {}",
+                            button,
+                            serde_json::to_string(&code).unwrap()
+                        );
+                    }
+                    gilrs::EventType::ButtonReleased(button, code) => {
+                        log::info!(
+                            "Event ButtonReleased: {:?} - code {}",
+                            button,
+                            serde_json::to_string(&code).unwrap()
+                        );
+                    }
+                    gilrs::EventType::ButtonChanged(button, value, code) => {
+                        log::info!(
+                            "Event ButtonChanged: {:?} @ {} - code {}",
+                            button,
+                            value,
+                            serde_json::to_string(&code).unwrap()
+                        );
+                    }
+                    gilrs::EventType::AxisChanged(axis, value, code) => {
+                        log::info!(
+                            "Event AxisChanged: {:?} @ {} - code {}",
+                            axis,
+                            value,
+                            serde_json::to_string(&code).unwrap()
+                        );
+                    }
+                    _ => {
+                        log::info!("Event {:?}", event);
+                    }
+                }
+            }
+        }
 
         // Update our own states
         if let Some(gamepad) = &mut *gamepad_one {
@@ -206,6 +263,92 @@ impl App {
 
         if let Some(gamepad) = &mut *gamepad_two {
             gamepad.last_state = Gamepad::map_to_gamepad_packet_data(gamepad.id, 2, &self.gilrs);
+        }
+
+        // Get rid of the immutable borrow, we'll need a mutable one later
+        let gamepad1_data = gamepad_one.clone();
+        drop(gamepad_one);
+
+        let gamepad2_data = gamepad_two.clone();
+        drop(gamepad_two);
+
+        // Update our mappings, if needed
+        if let Some(gamepad) = gamepad1_data {
+            self.update_mapping_if_needed(gamepad.id);
+        }
+
+        if let Some(gamepad) = gamepad2_data {
+            self.update_mapping_if_needed(gamepad.id);
+        }
+    }
+
+    /// Updates the mapping of a controller if needed
+    pub fn update_mapping_if_needed(&mut self, id: GamepadId) {
+        let gamepad = self.gilrs.gamepad(id);
+
+        // Official REV controller
+        if gamepad.name().contains("ZEROPLUS P4") {
+            let has_custom_mapping = gamepad.map_name().eq(&Some(CUSTOM_MAP_NAME));
+
+            if has_custom_mapping {
+                return;
+            }
+
+            let mut map = Mapping::new();
+
+            for (code, button) in BUTTON_MAP {
+                if code == UNKNOWN_CODE {
+                    log::warn!(
+                        "Button {:?} on REV controller still has unknown code for your platform",
+                        button
+                    );
+                    continue;
+                }
+
+                match serde_json::from_str::<Code>(&code) {
+                    Err(e) => {
+                        log::error!(
+                            "Failed to deserialize {} into platform gamepad code! (error: {:?})",
+                            code,
+                            e
+                        );
+                        log::error!("Please open an issue on github.");
+                    }
+                    Ok(deserialized) => {
+                        map.insert_btn(deserialized, button);
+                    }
+                }
+            }
+
+            for (code, axis) in AXIS_MAP {
+                if code == UNKNOWN_CODE {
+                    log::warn!(
+                        "Axis {:?} on REV controller still has unknown code for your platform",
+                        axis
+                    );
+                    continue;
+                }
+
+                match serde_json::from_str::<Code>(&code) {
+                    Err(e) => {
+                        log::error!(
+                            "Failed to deserialize {} into platform gamepad code! (error: {:?})",
+                            code,
+                            e
+                        );
+                        log::error!("Please open an issue on github.");
+                    }
+                    Ok(deserialized) => {
+                        map.insert_axis(deserialized, axis);
+                    }
+                }
+            }
+
+            self.gilrs
+                .set_mapping(id.into(), &map, Some(CUSTOM_MAP_NAME))
+                .expect("Failed to apply custom map");
+
+            log::debug!("Applied custom binding to REV controller!");
         }
     }
 }
@@ -291,7 +434,9 @@ impl Gamepad {
             right_stick_x: gamepad.value(Axis::RightStickX),
             right_stick_y: gamepad.value(Axis::RightStickY),
             timestamp,
-            // Note: unideal, but we can't? get the analog value from gilrs
+            // FIXME: unideal, but we can't? get the analog value from gilrs
+            //
+            // Some have Left + Right Z, but not all are mapped
             left_trigger: gamepad.is_pressed(Button::LeftTrigger2) as u8 as f32,
             right_trigger: gamepad.is_pressed(Button::RightTrigger2) as u8 as f32,
             button_flags: flags.bits(),
