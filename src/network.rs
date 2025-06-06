@@ -10,8 +10,8 @@ use crate::{
         heartbeat_packet::HeartbeatPacketData,
         packet::{Packet, PacketType},
         robot_command::{
-            CommandPacketData, NOTIFY_ACTIVE_CONFIGURATION, NOTIFY_INIT_OPMODE,
-            NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES, NOTIFY_RUN_OPMODE, OpModeData,
+            CommandPacketData, INIT_OPMODE, NOTIFY_ACTIVE_CONFIGURATION, NOTIFY_INIT_OPMODE,
+            NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES, NOTIFY_RUN_OPMODE, OPMODE_STOP, OpModeData,
             REQUEST_ACTIVE_CONFIGURATION, REQUEST_OP_MODES, RobotConfiguration,
         },
         telemetry_packet::{
@@ -230,6 +230,19 @@ impl NetworkHandler {
         )
         .await;
 
+        // If we have a running opmode, end it so we don't bug out
+        /*send_command(
+            &self.socket,
+            CommandPacketData {
+                acknowledged: false,
+                command: INIT_OPMODE.to_string(),
+                data: OPMODE_STOP.to_string(),
+                timestamp: get_timestamp_nanos(),
+            },
+            self.shared_data.clone(),
+        )
+        .await;*/
+
         loop {
             // Clear the receive buffer, so we can once again receive data into it
             recv_buffer = [0; RECEIVE_BUFFER_SIZE];
@@ -296,7 +309,7 @@ impl NetworkHandler {
 
                                                 log::debug!("Received command packet ({:?})", data);
 
-                                                                self.handle_command_packet(data).await;
+                                                                self.handle_command_packet(data, packet.sequence_number.unwrap()).await;
                                              }
                                              PacketType::Telemetry => {
                                                  let Some(data) = TelemetryPacketData::read_from(&mut packet.data) else {
@@ -572,9 +585,13 @@ impl NetworkHandler {
     }
 
     /// Handles receiving a command packet
-    pub async fn handle_command_packet(&mut self, packet: CommandPacketData) {
+    pub async fn handle_command_packet(&mut self, packet: CommandPacketData, sequence_number: i16) {
         if packet.acknowledged {
-            log::debug!("Received acknowledge for command {}", packet.command);
+            log::debug!(
+                "Received acknowledge for command {} (seq {})",
+                packet.command,
+                sequence_number
+            );
 
             let mut shared_debug = self.shared_data.write().await;
 
@@ -585,8 +602,15 @@ impl NetworkHandler {
                     break;
                 };
 
-                if old_packet.0.1.command == packet.command {
-                    log::debug!("{} command ACK by the server", old_packet.0.1.command);
+                let same_command = old_packet.0.1.command == packet.command;
+                let same_sequence_number = old_packet.0.0 == sequence_number;
+
+                if same_command && same_sequence_number {
+                    log::debug!(
+                        "{} command (seq {}) ACK by the server",
+                        old_packet.0.1.command,
+                        sequence_number
+                    );
 
                     let _ = shared_debug.unacknowledged_command_packets.remove(i);
                     continue;
@@ -603,7 +627,7 @@ impl NetworkHandler {
         log::info!("Sending ACK..");
 
         // Send back an ackowledge for this
-        send_packet(
+        send_packet_without_seq(
             &self.socket,
             Packet::from_packet_type_and_writable(
                 PacketType::Command,
@@ -611,9 +635,10 @@ impl NetworkHandler {
                     command: packet.command.clone(),
                     acknowledged: true,
                     data: String::new(),
-                    timestamp: get_timestamp_nanos(),
+                    timestamp: packet.timestamp,
                 },
-            ),
+            )
+            .with_sequence_number(sequence_number),
         )
         .await;
 

@@ -30,6 +30,13 @@ impl Packet {
 
         Self::from_packet_type_and_bytes(packet_type, data_buffer)
     }
+
+    /// Returns self with sequence number set to Some(arg)
+    pub fn with_sequence_number(self, sequence_number: i16) -> Self {
+        let mut self_a = self;
+        self_a.sequence_number = Some(sequence_number);
+        self_a
+    }
 }
 
 impl Writeable for Packet {
