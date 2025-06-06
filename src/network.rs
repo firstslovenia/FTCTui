@@ -231,7 +231,7 @@ impl NetworkHandler {
         .await;
 
         // If we have a running opmode, end it so we don't bug out
-        /*send_command(
+        send_command(
             &self.socket,
             CommandPacketData {
                 acknowledged: false,
@@ -241,7 +241,7 @@ impl NetworkHandler {
             },
             self.shared_data.clone(),
         )
-        .await;*/
+        .await;
 
         loop {
             // Clear the receive buffer, so we can once again receive data into it
