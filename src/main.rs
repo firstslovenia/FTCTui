@@ -18,7 +18,7 @@ async fn main() -> color_eyre::Result<()> {
     CombinedLogger::init(vec![WriteLogger::new(
         LevelFilter::Trace,
         Config::default(),
-        File::create("log.log").unwrap(),
+        File::create("latest.log").unwrap(),
     )])
     .unwrap();
 

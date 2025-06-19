@@ -150,9 +150,15 @@ pub async fn start_network_thread(
         .await
         .expect("Failed to bind to port 20884");
 
-    sock.connect(remote_addr)
-        .await
-        .expect("Failed to connect to robot..");
+    match sock.connect(remote_addr).await {
+        Ok(_) => {}
+        Err(e) => {
+            log::error!("Failed to connect to robot: {}", e);
+            println!("Failed to connect to robot: {}\n", e);
+            println!("You are (probably) not connected to the right Wi-Fi network.");
+            std::process::exit(2);
+        }
+    }
 
     log::info!("Connected UDP socket!");
 
