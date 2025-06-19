@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use super::traits::{Readable, Writeable, read_string_from};
+use super::{
+    hardware::device::HardwareDeviceType,
+    traits::{Readable, Writeable, read_string_from},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Data structure of a Robot Command Packet
@@ -87,13 +90,41 @@ pub const NOTIFY_OP_MODES: &str = "CMD_NOTIFY_OP_MODE_LIST";
 /// Client to server
 pub const ACTIVATE_CONFIGURATION: &str = "CMD_ACTIVATE_CONFIGURATION";
 
+/// Data is json RobotConfigurationFile + ';' + an xml configuration
+///
+/// Client to server
+pub const SAVE_CONFIGURATION: &str = "CMD_SAVE_CONFIGURATION";
+
+/// Data is json RobotConfigurationFile
+///
+/// Client to server
+pub const DELETE_CONFIGURATION: &str = "CMD_DELETE_CONFIGURATION";
+
 /// Client to server
 pub const REQUEST_ACTIVE_CONFIGURATION: &str = "CMD_REQUEST_ACTIVE_CONFIG";
 
-/// Data is json RobotConfiguration
+/// Data is json RobotConfigurationFile
 ///
 /// Server to client
 pub const NOTIFY_ACTIVE_CONFIGURATION: &str = "CMD_NOTIFY_ACTIVE_CONFIGURATION";
+
+/// Client to server
+pub const REQUEST_CONFIGURATIONS: &str = "CMD_REQUEST_CONFIGURATIONS";
+
+/// Data is json Vec<RobotConfigurationFile>
+///
+/// Server to client
+pub const REQUEST_CONFIGURATIONS_RESPONSE: &str = "CMD_REQUEST_CONFIGURATIONS_RESP";
+
+/// Data is json RobotConfigurationFile
+///
+/// Client to server
+pub const REQUEST_CONFIGURATION: &str = "CMD_REQUEST_PARTICULAR_CONFIGURATION";
+
+/// Data is json xml configuration
+///
+/// Server to client
+pub const REQUEST_CONFIGURATION_RESPONSE: &str = "CMD_REQUEST_PARTICULAR_CONFIGURATION_RESP";
 
 /// Data is a string name of an opmode
 ///
@@ -165,7 +196,7 @@ pub enum OpModeSource {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "camelCase")]
 /// Data about a particular configuration (file)
-pub struct RobotConfiguration {
+pub struct RobotConfigurationFile {
     /// Unsure what this means
     pub is_dirty: bool,
 
@@ -186,4 +217,11 @@ pub enum ConfigurationLocation {
     None,
     LocalStorage,
     Resource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Data about which hardware device types the robot has / supports
+pub struct UserDeviceList {
+    #[serde(flatten)]
+    pub devices: Vec<HardwareDeviceType>,
 }

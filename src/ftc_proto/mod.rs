@@ -1,6 +1,7 @@
 //! Includes rust types for FTC's protocol between the FTC robot controller app and a control hub
 
 pub mod gamepad_packet;
+pub mod hardware;
 pub mod heartbeat_packet;
 pub mod packet;
 pub mod robot_command;
@@ -9,6 +10,11 @@ pub mod time_packet;
 pub mod traits;
 
 pub mod test_deserializer {
+
+    use std::fs::File;
+
+    use log::LevelFilter;
+    use simplelog::{CombinedLogger, Config, WriteLogger};
 
     use super::{
         gamepad_packet::GamepadPacketData,
@@ -25,7 +31,10 @@ pub mod test_deserializer {
         let mut success: usize = 0;
         let mut i: usize = 0;
 
-        let mut binary = tokio::fs::read("secret path to .bin file").await.unwrap();
+        let mut binary =
+            tokio::fs::read("secret path to .bin file")
+                .await
+                .unwrap();
 
         let started = tokio::time::Instant::now();
 
@@ -48,8 +57,9 @@ pub mod test_deserializer {
                                 None => {
                                     println!("Failed to {} read as telemetry packet!", i);
                                 }
-                                Some(_p) => {
+                                Some(p) => {
                                     success += 1;
+                                    log::trace!("{:?}", p);
                                     //println!("{} - Telemetry", success);
                                 }
                             }
@@ -58,9 +68,10 @@ pub mod test_deserializer {
                             None => {
                                 println!("Failed to read {} as time packet!", i);
                             }
-                            Some(_p) => {
+                            Some(p) => {
                                 success += 1;
                                 //println!("{} - Time", success);
+                                log::trace!("{:?}", p);
                             }
                         },
                         PacketType::Command => {
@@ -68,9 +79,10 @@ pub mod test_deserializer {
                                 None => {
                                     println!("Failed to read {} as command packet!", i);
                                 }
-                                Some(_p) => {
+                                Some(p) => {
                                     success += 1;
                                     //println!("{} - Command", success);
+                                    log::trace!("{:?}", p);
                                 }
                             }
                         }
@@ -79,9 +91,10 @@ pub mod test_deserializer {
                                 None => {
                                     println!("Failed to read {} as heartbeat packet!", i);
                                 }
-                                Some(_p) => {
+                                Some(p) => {
                                     success += 1;
                                     //println!("{} - Heartbeat", success);
+                                    log::trace!("{:?}", p);
                                 }
                             }
                         }
@@ -90,9 +103,10 @@ pub mod test_deserializer {
                             None => {
                                 println!("Failed to read {} as gamepad packet!", i);
                             }
-                            Some(_p) => {
+                            Some(p) => {
                                 success += 1;
                                 //println!("{} - Gamepad", success);
+                                log::trace!("{:?}", p);
                             }
                         },
                     };
@@ -100,7 +114,7 @@ pub mod test_deserializer {
             }
         }
 
-        println!(
+        log::info!(
             "Sucessfully deserialized {} / {}, execution took {:?}",
             success,
             i,

@@ -6,7 +6,7 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, Ke
 use crate::{
     App,
     app::{
-        ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, GAMEPADS_BLOCK_ID, TELEOP_BLOCK_ID,
+        ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, AppMode, GAMEPADS_BLOCK_ID, TELEOP_BLOCK_ID,
         get_timestamp_millis,
     },
     ftc_proto::{
@@ -44,6 +44,14 @@ impl App {
 
     /// Handles the key events and updates the state of [`App`].
     pub async fn on_key_event(&mut self, key: KeyEvent) {
+        match self.mode {
+            AppMode::Normal => self.on_normal_mode_key_event(key).await,
+            AppMode::InsertCommand => self.on_command_insert_mode_key_event(key).await,
+        }
+    }
+
+    /// Handles the key events and updates the state of [`App`] when in normal mode.
+    pub async fn on_normal_mode_key_event(&mut self, key: KeyEvent) {
         match (key.modifiers, key.code) {
             // Quit handler
             (_, KeyCode::Esc | KeyCode::Char('q'))
@@ -153,6 +161,42 @@ impl App {
                 _ => {}
             },
 
+            // Change modes into command mode
+            (_, KeyCode::Char(':')) => {
+                self.mode = AppMode::InsertCommand;
+                self.current_command.clear();
+            }
+            _ => {}
+        }
+    }
+
+    /// Handles the key events and updates the state of [`App`] when in command insertion mode.
+    pub async fn on_command_insert_mode_key_event(&mut self, key: KeyEvent) {
+        match (key.modifiers, key.code) {
+            // Return to normal mode
+            (_, KeyCode::Esc) => {
+                self.mode = AppMode::Normal;
+                self.current_command.clear();
+            }
+
+            // Submit command
+            (_, KeyCode::Enter) => {
+                self.mode = AppMode::Normal;
+                self.current_command.clear();
+
+                todo!();
+            }
+
+            // Delete one character
+            (_, KeyCode::Backspace) => {
+                self.current_command.pop();
+            }
+
+            (_, KeyCode::Char(char)) => {
+                if char.is_alphanumeric() || char == ' ' {
+                    self.current_command.push(char);
+                }
+            }
             _ => {}
         }
     }
@@ -272,7 +316,6 @@ impl App {
         let gamepad2_data = gamepad_two.clone();
         drop(gamepad_two);
 
-        // Update our mappings, if needed
         if let Some(gamepad) = gamepad1_data {
             self.update_mapping_if_needed(gamepad.id);
         }

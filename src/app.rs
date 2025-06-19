@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::SystemTime};
 
 use color_eyre::eyre::Result;
-use gilrs::Gilrs;
+use gilrs::{Gilrs, GilrsBuilder};
 use lazy_static::lazy_static;
 use ratatui::{DefaultTerminal, widgets::ListState};
 use tokio::{net::UdpSocket, sync::RwLock};
@@ -10,6 +10,7 @@ use crate::{
     ftc_proto::robot_command::{
         CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
     },
+    gamepad_map::REV_CONTROLLER_CUSTOM_SDL_MAPPING,
     input::Gamepad,
     network::{SharedNetworkData, send_command},
     robot::Robot,
@@ -54,6 +55,14 @@ pub struct App {
     /// Number of lines scrolled in the telemetry display
     pub telemetry_display_scroll: u16,
 
+    /// Our current command buffer, if in [AppMode::InsertCommand]
+    pub current_command: String,
+
+    /// What "mode" we're in, mostly used for input handling
+    ///
+    /// See [AppMode]
+    pub mode: AppMode,
+
     /// Handle of our gamepad input handler
     pub gilrs: Gilrs,
     pub gamepad_one: Arc<RwLock<Option<Gamepad>>>,
@@ -76,6 +85,11 @@ impl App {
         )
         .await;
 
+        let gilrs = GilrsBuilder::new()
+            .add_mappings(REV_CONTROLLER_CUSTOM_SDL_MAPPING)
+            .build()
+            .expect("Failed to build gilrs object");
+
         App {
             socket,
             shared_network_data: network_debug_data,
@@ -85,9 +99,11 @@ impl App {
             teleop_list_state: ListState::default().with_selected(Some(0)),
             auto_list_state: ListState::default().with_selected(Some(0)),
             telemetry_display_scroll: 0,
-            gilrs: Gilrs::new().unwrap(),
+            gilrs,
             gamepad_one,
             gamepad_two,
+            mode: AppMode::Normal,
+            current_command: String::with_capacity(32),
         }
     }
 
@@ -221,6 +237,17 @@ impl App {
     pub async fn quit(&mut self) {
         self.running = false;
     }
+}
+
+/// What mode our UI is in, denotes what different inputs mean
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum AppMode {
+    /// Tab switches selected elements, : opens command mode, different keys are hotkeys
+    #[default]
+    Normal,
+    /// Enter submits the current command, escape returns to normal mode, character keys are added
+    /// to the command buffer
+    InsertCommand,
 }
 
 /// Gets a millis timestamp of the app's uptime

@@ -12,7 +12,7 @@ use crate::{
         robot_command::{
             CommandPacketData, INIT_OPMODE, NOTIFY_ACTIVE_CONFIGURATION, NOTIFY_INIT_OPMODE,
             NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES, NOTIFY_RUN_OPMODE, OPMODE_STOP, OpModeData,
-            REQUEST_ACTIVE_CONFIGURATION, REQUEST_OP_MODES, RobotConfiguration,
+            REQUEST_ACTIVE_CONFIGURATION, REQUEST_OP_MODES, RobotConfigurationFile,
         },
         telemetry_packet::{
             ROBOT_BATTERY_LEVEL_KEY, ROBOT_CONTROLLER_BATTERY_STATUS_KEY, SYSTEM_ERROR_KEY,
@@ -662,10 +662,15 @@ impl NetworkHandler {
                 }
             },
             NOTIFY_ACTIVE_CONFIGURATION => {
-                match serde_json::from_str::<RobotConfiguration>(&packet.data) {
+                match serde_json::from_str::<RobotConfigurationFile>(&packet.data) {
                     Ok(config) => {
-                        // todo: save this somewhere and show it on the ui
                         log::info!("Received robot configuration: {:?}", config);
+
+                        let mut write_lock = self.robot.write().await;
+
+                        write_lock.active_configuration = Some(config);
+
+                        drop(write_lock);
                     }
                     Err(e) => {
                         log::warn!(

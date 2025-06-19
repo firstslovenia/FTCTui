@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::Style,
+    style::{Style, Stylize},
     text::{Line, Span},
     widgets::{Block, List, ListItem, Padding, Paragraph, Wrap},
 };
@@ -13,8 +13,8 @@ use styles::{
 use crate::{
     App,
     app::{
-        ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID, ROBOT_BLOCK_ID,
-        TELEOP_BLOCK_ID,
+        ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, AppMode, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID,
+        ROBOT_BLOCK_ID, TELEOP_BLOCK_ID,
     },
     ftc_proto::{gamepad_packet::ButtonFlags, time_packet::RobotOpmodeState},
     network::NetworkStatus,
@@ -30,9 +30,18 @@ impl App {
     /// - <https://docs.rs/ratatui/latest/ratatui/widgets/index.html>
     /// - <https://github.com/ratatui/ratatui/tree/main/ratatui-widgets/examples>
     pub async fn render(&mut self, frame: &mut Frame<'_>) {
-        let main_layout =
-            Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(frame.area());
+        let main_layout = match self.mode {
+            AppMode::Normal => {
+                Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .split(frame.area())
+            }
+            AppMode::InsertCommand => Layout::vertical([
+                Constraint::Percentage(50),
+                Constraint::Percentage(50),
+                Constraint::Length(1),
+            ])
+            .split(frame.area()),
+        };
 
         let top_inner_layout = Layout::horizontal([
             Constraint::Ratio(2, 6),
@@ -112,10 +121,6 @@ impl App {
 
         frame.render_widget(&debug_block, top_inner_layout[0]);
 
-        // These two blocks are rendered in the list render function
-        //frame.render_widget(&teleop_block, top_inner_layout[1]);
-        //frame.render_widget(&auto_block, top_inner_layout[2]);
-
         frame.render_widget(&robot_block, top_inner_layout[3]);
 
         frame.render_widget(&active_opmode_block, bottom_inner_layout[0]);
@@ -145,6 +150,15 @@ impl App {
             self.create_gamepads_paragraph().await,
             gamepads_block.inner(bottom_inner_layout[1]),
         );
+
+        // Render the vim-like command thingy
+        if self.mode == AppMode::InsertCommand {
+            // Slightly left-padded
+            let command_paragraph =
+                Paragraph::new(format!(":{}█", self.current_command)).fg(TEXT_COLOR);
+
+            frame.render_widget(command_paragraph, main_layout[2]);
+        }
     }
 
     /// Creates the gamepads debug text
@@ -372,6 +386,18 @@ impl App {
         } else {
             robot_text.push(Line::from(vec![
                 Span::styled("Battery voltage: ", Style::new().fg(MUTED_TEXT_COLOR)),
+                Span::styled("Unknown".to_string(), Style::new().fg(MUTED_TEXT_COLOR)),
+            ]));
+        }
+
+        if let Some(active_config) = &robot.active_configuration {
+            robot_text.push(Line::from(vec![
+                Span::styled("Active configuration: ", Style::new().fg(MUTED_TEXT_COLOR)),
+                Span::styled(active_config.name.clone(), Style::new().fg(TEXT_COLOR)),
+            ]));
+        } else {
+            robot_text.push(Line::from(vec![
+                Span::styled("Active configuration: ", Style::new().fg(MUTED_TEXT_COLOR)),
                 Span::styled("Unknown".to_string(), Style::new().fg(MUTED_TEXT_COLOR)),
             ]));
         }

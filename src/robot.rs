@@ -1,5 +1,7 @@
 use crate::ftc_proto::{
-    robot_command::{DEFAULT_OPMODE_GROUP, OPMODE_STOP, OpModeData, OpModeFlavor},
+    robot_command::{
+        DEFAULT_OPMODE_GROUP, OPMODE_STOP, OpModeData, OpModeFlavor, RobotConfigurationFile,
+    },
     time_packet::RobotOpmodeState,
 };
 
@@ -14,6 +16,9 @@ pub struct Robot {
 
     // The list of opmodes the robot has
     pub opmode_list: Option<Vec<OpModeData>>,
+
+    /// The active configuration, if we've received one
+    pub active_configuration: Option<RobotConfigurationFile>,
 
     /// The last battery voltage we got
     pub battery_voltage: Option<f32>,
@@ -38,6 +43,7 @@ impl Robot {
             active_opmode_state: None,
             active_opmode: OPMODE_STOP.to_string(),
             opmode_list: None,
+            active_configuration: None,
             battery_voltage: None,
             last_battery_update: std::time::Instant::now(),
             warning_message: None,
@@ -95,6 +101,7 @@ impl Robot {
                 },
             ]),
             active_opmode: "Bautonomous".to_string(),
+            active_configuration: None,
             error_message: None,
             warning_message: Some(String::from("Test warning message")),
             battery_voltage: Some(12.3),
