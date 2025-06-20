@@ -1,6 +1,6 @@
 
 <p align="center">
-	<img src="assets/logo.png" alt="project logo, looks like a shell prompt" height="100px"/>
+	<img src="assets/logo.png" alt="project logo, looks like a shell prompt" height="128px"/>
 </p>
 
 <h1 align="center">FTC TUI</h1>
