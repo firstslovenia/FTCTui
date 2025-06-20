@@ -31,6 +31,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+      - name: Install required libraries
+        run: sudo apt install libudev-dev
       - name: Compile
         run: cargo build --release
       - name: Upload artifact
