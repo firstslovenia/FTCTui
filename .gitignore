@@ -1,5 +1,7 @@
 /target
 network-re
 log.log
+latest.log
+*.log
 flamegraph.svg
 perf.data
