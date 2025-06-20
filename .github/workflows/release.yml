@@ -35,7 +35,7 @@ jobs:
         with:
           cache-all-crates: "true"
       - name: Install required libraries
-        run: sudo apt install libudev-dev
+        run: sudo apt update && sudo apt install libudev-dev
       - name: Compile
         run: cargo build --release
       - name: Upload release
