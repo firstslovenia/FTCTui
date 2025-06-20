@@ -294,7 +294,7 @@ dependencies = [
 
 [[package]]
 name = "ftctui"
-version = "0.1.0"
+version = "0.1.0-beta1"
 dependencies = [
  "bitflags",
  "color-eyre",

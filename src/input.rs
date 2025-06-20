@@ -104,7 +104,7 @@ impl App {
             }
 
             // Move main selection forwards and backwards
-            (_, KeyCode::Tab) => {
+            (_, KeyCode::Tab) | (_, KeyCode::Right) => {
                 if self.selected_block == GAMEPADS_BLOCK_ID {
                     self.selected_block = 0;
                 } else {
@@ -113,7 +113,7 @@ impl App {
             }
 
             // Move main selection forwards and backwards
-            (_, KeyCode::BackTab) => {
+            (_, KeyCode::BackTab) | (_, KeyCode::Left) => {
                 if self.selected_block == 0 {
                     self.selected_block = GAMEPADS_BLOCK_ID;
                 } else {
