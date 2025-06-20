@@ -25,6 +25,7 @@ wavy = "0.9.1"
 [dependencies.gilrs]
 git = "https://gitlab.com/gilrs-project/gilrs.git"
 #version = "0.11.0"
-features = ["serde-serialize"]
+default-features=false
+features = ["serde-serialize", "xinput"]
 
 
