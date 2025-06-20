@@ -208,16 +208,28 @@ impl App {
         let mut gamepad_one = self.gamepad_one.write().await;
         let mut gamepad_two = self.gamepad_two.write().await;
 
-        // Check if any gamepads disconnected
+        // Check if any gamepads disconnected and if we want to unbind them
         if let Some(gamepad) = &*gamepad_one {
             if !gamepad_ids.contains(&gamepad.id) {
                 *gamepad_one = None;
+            } else {
+                let gamepad = self.gilrs.gamepad(gamepad.id);
+
+                if gamepad.is_pressed(Button::Start) && gamepad.is_pressed(Button::West) {
+                    *gamepad_one = None;
+                }
             }
         }
 
         if let Some(gamepad) = &*gamepad_two {
             if !gamepad_ids.contains(&gamepad.id) {
                 *gamepad_two = None;
+            } else {
+                let gamepad = self.gilrs.gamepad(gamepad.id);
+
+                if gamepad.is_pressed(Button::Start) && gamepad.is_pressed(Button::West) {
+                    *gamepad_two = None;
+                }
             }
         }
 
@@ -235,19 +247,31 @@ impl App {
                 continue;
             }
 
-            if let Some(gamepad_one) = &*gamepad_one {
-                if gamepad_two.is_none() && gamepad_one.id != id {
-                    *gamepad_two = Some(Gamepad {
-                        id,
-                        last_state: Gamepad::map_to_gamepad_packet_data(id, 2, &self.gilrs),
-                    });
-                    continue;
-                }
-            } else {
+            // Bind for gamepad 1
+            if gamepad.is_pressed(Button::Start) && gamepad.is_pressed(Button::South) {
                 *gamepad_one = Some(Gamepad {
                     id,
                     last_state: Gamepad::map_to_gamepad_packet_data(id, 1, &self.gilrs),
-                })
+                });
+
+                if let Some(gp_two) = &*gamepad_two {
+                    if gp_two.id == gamepad.id() {
+                        *gamepad_two = None;
+                    }
+                }
+            }
+            // Bind for gamepad 2
+            else if gamepad.is_pressed(Button::Start) && gamepad.is_pressed(Button::East) {
+                *gamepad_two = Some(Gamepad {
+                    id,
+                    last_state: Gamepad::map_to_gamepad_packet_data(id, 2, &self.gilrs),
+                });
+
+                if let Some(gp_one) = &*gamepad_one {
+                    if gp_one.id == gamepad.id() {
+                        *gamepad_one = None;
+                    }
+                }
             }
         }
 

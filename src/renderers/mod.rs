@@ -336,7 +336,7 @@ impl App {
             } else {
                 gamepads_text.push(Line::from(vec![
                     Span::styled(format!("Gamepad {}", i + 1), Style::new().fg(TEXT_COLOR)),
-                    Span::styled(" - not connected", Style::new().fg(MUTED_TEXT_COLOR)),
+                    Span::styled(" - not bound", Style::new().fg(MUTED_TEXT_COLOR)),
                 ]));
             }
         }
