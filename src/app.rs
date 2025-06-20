@@ -10,7 +10,7 @@ use crate::{
     ftc_proto::robot_command::{
         CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
     },
-    gamepad_map::REV_CONTROLLER_CUSTOM_SDL_MAPPING,
+    gamepad_map::REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX,
     input::Gamepad,
     network::{SharedNetworkData, send_command},
     robot::Robot,
@@ -86,7 +86,7 @@ impl App {
         .await;
 
         let gilrs = GilrsBuilder::new()
-            .add_mappings(REV_CONTROLLER_CUSTOM_SDL_MAPPING)
+            .add_mappings(REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX)
             .build()
             .expect("Failed to build gilrs object");
 
