@@ -1,4 +1,9 @@
-# FTC TUI
+
+<p align="center">
+	<img src="assets/logo.png" alt="project logo, looks like a shell prompt" height="100px"/>
+</p>
+
+<h1 align="center">FTC TUI</h1>
 
 FTC TUI is a desktop app written in rust which aims to be a drop-in replacement for REV Robotics' Driver hub / Driver Station app.
 
