@@ -40,7 +40,7 @@ Out of scope / currently wontfix:
 
 Check the releases tab, download the relevant binary for your system and architecture (if you don't know what that means, choose windows_x64) and run it.
 
-On linux systems, you may need to run `chmod +x ./ftctui_linux_ARCH` first.
+On linux systems, you may need to run `chmod +x ./ftctui_v0.1.0_linux_x64` first.
 
 ## Usage
 

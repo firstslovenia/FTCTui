@@ -1,0 +1,45 @@
+# .github/workflows/release.yml
+name: Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  release-windows:
+    name: release windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: Compile
+        run: cargo build --release
+      - name: Upload release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/release/ftctui.exe
+          asset_name: ftctui_${{ github.ref }}_windows_x64.exe
+          tag: ${{ github.ref }}
+
+  release-linux:
+    name: release linux x64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: Compile
+        run: cargo build --release
+      - name: Upload release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/release/ftctui
+          asset_name: ftctui_${{ github.ref }}_linux_x64
+          tag: ${{ github.ref }}

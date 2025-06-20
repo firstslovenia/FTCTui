@@ -1,0 +1,41 @@
+# .github/workflows/build.yml
+name: Build
+
+on: workflow_dispatch
+
+jobs:
+  build-windows:
+    name: build x86_64-pc-windows-msvc
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: Compile
+        run: cargo build --release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ftctui_windows_x64.exe
+          path: target/release/ftctui.exe
+
+
+  build-linux:
+    name: build x86_64-unknown-linux-gnu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: Compile
+        run: cargo build --release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ftctui_linux_x64
+          path: target/release/ftctui
+
