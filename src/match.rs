@@ -167,3 +167,27 @@ pub enum MatchSFX {
     End06,
     Abortmatch,
 }
+
+impl MatchSFX {
+    pub fn wav_file(&self) -> &[u8] {
+        match self {
+            MatchSFX::MatchStart01 => MATCH_START_01_WAV,
+            MatchSFX::Drivers02 => DRIVERS_02_WAV,
+            MatchSFX::Countdown03 => COUNTDOWN_03_WAV,
+            MatchSFX::TeleopStart04 => TELEOP_START_04_WAV,
+            MatchSFX::Endgame05 => ENDGAME_05_WAV,
+            MatchSFX::End06 => END_06_WAV,
+            MatchSFX::Abortmatch => ABORT_MATCH_WAV,
+        }
+    }
+}
+
+pub const MATCH_START_01_WAV: &[u8; 35902] = include_bytes!("../assets/01-match-start-charge.wav");
+pub const DRIVERS_02_WAV: &[u8; 103270] =
+    include_bytes!("../assets/02-beep beep beep, drivers pick up your controlers.wav");
+pub const COUNTDOWN_03_WAV: &[u8; 534258] = include_bytes!("../assets/03-3-2-1.wav");
+pub const TELEOP_START_04_WAV: &[u8; 23451] =
+    include_bytes!("../assets/04-driver controlled start-firebell.wav");
+pub const ENDGAME_05_WAV: &[u8; 47300] = include_bytes!("../assets/05-engame-factwhistle.wav");
+pub const END_06_WAV: &[u8; 66230] = include_bytes!("../assets/06-endmatch.wav");
+pub const ABORT_MATCH_WAV: &[u8; 56698] = include_bytes!("../assets/abort_match.wav");

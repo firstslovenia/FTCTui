@@ -7,13 +7,14 @@ use ratatui::{DefaultTerminal, widgets::ListState};
 use tokio::{net::UdpSocket, sync::RwLock};
 
 use crate::{
+    Args,
     ftc_proto::robot_command::{
-        CommandPacketData, OpModeData, OpModeFlavor, INIT_OPMODE, OPMODE_STOP, RUN_OPMODE
+        CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
     },
     gamepad_map::REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX,
     input::Gamepad,
-    network::{send_command, SharedNetworkData},
-    robot::Robot, Args,
+    network::{SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
+    robot::Robot,
 };
 
 lazy_static! {
@@ -72,6 +73,11 @@ pub struct App {
 impl App {
     /// Construct a new instance of [`App`].
     pub async fn new(args: Args) -> Self {
+        // Clear an existing telemetry log, so we write into it
+        if args.export_telemetry {
+            let _ = std::fs::remove_file(TELEMETRY_LOG_FILENAME);
+        }
+
         let robot = Arc::new(RwLock::new(Robot::new_empty()));
 
         let gamepad_one = Arc::new(RwLock::new(None));
@@ -82,7 +88,7 @@ impl App {
             robot.clone(),
             gamepad_one.clone(),
             gamepad_two.clone(),
-				args.export_telemetry
+            args.export_telemetry,
         )
         .await;
 
