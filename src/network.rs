@@ -1,10 +1,13 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicI16, Ordering},
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicI16, Ordering},
+    },
 };
 
 use crate::{
-    app::get_timestamp_nanos,
+    app::{get_timestamp_millis, get_timestamp_nanos},
     ftc_proto::{
         gamepad_packet::GamepadPacketData,
         heartbeat_packet::HeartbeatPacketData,
@@ -24,7 +27,18 @@ use crate::{
     input::Gamepad,
     robot::Robot,
 };
+use serde::{Deserialize, Serialize};
 use tokio::{net::UdpSocket, sync::RwLock};
+
+/// Structure of the telemetry log entries
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TelemetryLogEntry {
+    pub t_elapsed_ms: u64,
+    pub entries: HashMap<String, String>,
+}
+
+/// Name of the telemetry log file
+pub const TELEMETRY_LOG_FILENAME: &str = "telemetry_log.json";
 
 // Todo: potentially randomly generate this?
 pub static SEQUENCE_NUMBER: AtomicI16 = AtomicI16::new(0);
@@ -135,6 +149,9 @@ pub struct NetworkHandler {
     pub robot: Arc<RwLock<Robot>>,
     pub gamepad_one: Arc<RwLock<Option<Gamepad>>>,
     pub gamepad_two: Arc<RwLock<Option<Gamepad>>>,
+
+    /// Whether to specially log telemetry we receive
+    pub log_telemetry: bool,
 }
 
 /// Starts the network thread, returning a handle to read debug data and a reference to the socket
@@ -143,6 +160,7 @@ pub async fn start_network_thread(
     robot: Arc<RwLock<Robot>>,
     gamepad_one: Arc<RwLock<Option<Gamepad>>>,
     gamepad_two: Arc<RwLock<Option<Gamepad>>>,
+    log_telemetry: bool,
 ) -> (Arc<RwLock<SharedNetworkData>>, Arc<UdpSocket>) {
     log::debug!("Trying to connect to {}..", remote_addr);
 
@@ -180,6 +198,7 @@ pub async fn start_network_thread(
         robot,
         gamepad_one,
         gamepad_two,
+        log_telemetry,
     };
 
     tokio::task::spawn(async move { network_handler.network_thread().await });
@@ -535,7 +554,7 @@ impl NetworkHandler {
 
         let mut user_telemetry_lines = Vec::new();
 
-        for entry in packet.string_entries {
+        for entry in packet.string_entries.clone() {
             if entry.key == ROBOT_BATTERY_LEVEL_KEY {
                 self.update_battery_voltage_from_telemetry_entry(entry)
                     .await;
@@ -554,6 +573,73 @@ impl NetworkHandler {
         }
 
         self.robot.write().await.telemetry_list = user_telemetry_lines;
+
+        if self.log_telemetry {
+            tokio::spawn(async move {
+                let Ok(exists) = std::fs::exists(TELEMETRY_LOG_FILENAME) else {
+                    log::error!("Failed check if telemetry log exists!");
+                    return;
+                };
+
+                let mut entries = Vec::new();
+
+                if exists {
+                    let Ok(string) = std::fs::read_to_string(TELEMETRY_LOG_FILENAME) else {
+                        log::error!("Failed to read existing telemetry log!");
+                        return;
+                    };
+
+                    let parsed: Vec<TelemetryLogEntry>;
+
+                    match serde_json::from_str(&string) {
+                        Ok(p) => parsed = p,
+                        Err(e) => {
+                            log::error!("Failed to parse existing telemetry log! {}", e);
+                            return;
+                        }
+                    }
+
+                    entries = parsed;
+                }
+
+                let mut telemetry_entries_as_map = HashMap::new();
+
+                for entry in packet.string_entries {
+                    if entry.key == ROBOT_BATTERY_LEVEL_KEY {
+                        telemetry_entries_as_map
+                            .insert("Battery Voltage [V]".to_string(), entry.value);
+                    } else {
+                        // All user telemetry keys start with the null byte
+                        if entry.key.starts_with('\0') {
+                            match entry.value.split_once(":") {
+                                Some((key, value)) => {
+                                    telemetry_entries_as_map
+                                        .insert(key.trim().to_string(), value.trim().to_string());
+                                }
+                                None => {
+                                    telemetry_entries_as_map.insert(entry.key, entry.value);
+                                }
+                            }
+                        } else {
+                            telemetry_entries_as_map.insert(entry.key, entry.value);
+                        }
+                    }
+                }
+
+                let new_entry = TelemetryLogEntry {
+                    entries: telemetry_entries_as_map,
+                    t_elapsed_ms: get_timestamp_millis(),
+                };
+
+                entries.push(new_entry);
+
+                let as_string = serde_json::to_string(&entries).unwrap();
+
+                if let Err(e) = std::fs::write(TELEMETRY_LOG_FILENAME, as_string) {
+                    log::error!("Failed to write telemetry log! {}", e);
+                }
+            });
+        }
 
         if packet.float_entries.len() > 0 {
             log::warn!("Received some float entries! {:?}", packet.float_entries);

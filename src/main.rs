@@ -2,6 +2,7 @@ use std::fs::File;
 
 use app::App;
 use simplelog::{CombinedLogger, Config, LevelFilter, WriteLogger};
+use clap::Parser;
 
 pub mod app;
 pub mod ftc_dashboard;
@@ -13,6 +14,13 @@ pub mod network;
 pub mod renderers;
 pub mod robot;
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = false)]
+    export_telemetry: bool,
+}
+
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     CombinedLogger::init(vec![WriteLogger::new(
@@ -22,7 +30,9 @@ async fn main() -> color_eyre::Result<()> {
     )])
     .unwrap();
 
-    let app = App::new().await;
+	 let args = Args::parse();
+
+    let app = App::new(args).await;
 
     color_eyre::install()?;
     let terminal = ratatui::init();

@@ -5,3 +5,4 @@ latest.log
 *.log
 flamegraph.svg
 perf.data
+telemetry_log.json

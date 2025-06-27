@@ -8,12 +8,12 @@ use tokio::{net::UdpSocket, sync::RwLock};
 
 use crate::{
     ftc_proto::robot_command::{
-        CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
+        CommandPacketData, OpModeData, OpModeFlavor, INIT_OPMODE, OPMODE_STOP, RUN_OPMODE
     },
     gamepad_map::REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX,
     input::Gamepad,
-    network::{SharedNetworkData, send_command},
-    robot::Robot,
+    network::{send_command, SharedNetworkData},
+    robot::Robot, Args,
 };
 
 lazy_static! {
@@ -71,7 +71,7 @@ pub struct App {
 
 impl App {
     /// Construct a new instance of [`App`].
-    pub async fn new() -> Self {
+    pub async fn new(args: Args) -> Self {
         let robot = Arc::new(RwLock::new(Robot::new_empty()));
 
         let gamepad_one = Arc::new(RwLock::new(None));
@@ -82,6 +82,7 @@ impl App {
             robot.clone(),
             gamepad_one.clone(),
             gamepad_two.clone(),
+				args.export_telemetry
         )
         .await;
 
