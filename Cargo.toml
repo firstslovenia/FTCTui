@@ -31,4 +31,7 @@ git = "https://gitlab.com/gilrs-project/gilrs.git"
 default-features=false
 features = ["serde-serialize", "xinput"]
 
+[build-dependencies]
+winresource = "0.1.22"
+
 
