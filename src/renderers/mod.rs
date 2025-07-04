@@ -119,6 +119,7 @@ impl App {
             _ => {}
         }
 
+        frame.render_widget(Clear, frame.area());
         frame.render_widget(&debug_block, top_inner_layout[0]);
 
         frame.render_widget(&robot_block, top_inner_layout[3]);
@@ -667,7 +668,7 @@ impl App {
         let popup = popup.lock().await;
 
         let block = Block::bordered()
-			   .title("Alert (enter to close)")
+            .title("Alert (enter to close)")
             .border_style(block_style())
             .padding(Padding::new(2, 2, 1, 1));
 

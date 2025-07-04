@@ -148,6 +148,11 @@ pub const NOTIFY_INIT_OPMODE: &str = "CMD_NOTIFY_INIT_OP_MODE";
 /// Server to client
 pub const NOTIFY_RUN_OPMODE: &str = "CMD_NOTIFY_RUN_OP_MODE";
 
+/// Data is a the stacktrace
+///
+/// Server to client
+pub const SHOW_STACKTRACE: &str = "CMD_SHOW_STACKTRACE";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 /// Data about a particular opmode, sent in notify opmode list
 pub struct OpModeData {

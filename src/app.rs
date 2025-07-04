@@ -5,6 +5,8 @@ use gilrs::{Gilrs, GilrsBuilder};
 use lazy_static::lazy_static;
 use ratatui::{
     DefaultTerminal,
+    style::Style,
+    text::{Line, Text},
     widgets::{ListState, Paragraph, Wrap},
 };
 use tokio::{
@@ -21,6 +23,7 @@ use crate::{
     input::Gamepad,
     network::{SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
     popup::{InfoPopup, Popup},
+    renderers::styles::{TEXT_COLOR, WARNING_COLOR},
     robot::Robot,
 };
 
@@ -74,6 +77,9 @@ pub struct App {
     /// Our active popup, if we have one
     pub active_popup: Option<Arc<Mutex<dyn Popup>>>,
 
+    /// A receiver to get popups from the network thread
+    pub popup_receiver: tokio::sync::mpsc::Receiver<Arc<Mutex<dyn Popup>>>,
+
     /// Handle of our gamepad input handler
     pub gilrs: Gilrs,
     pub gamepad_one: Arc<RwLock<Option<Gamepad>>>,
@@ -93,11 +99,15 @@ impl App {
         let gamepad_one = Arc::new(RwLock::new(None));
         let gamepad_two = Arc::new(RwLock::new(None));
 
+        // Channel so the network thread can send us popups
+        let (popup_sender, popup_receiver) = tokio::sync::mpsc::channel(8);
+
         let (network_debug_data, socket) = crate::network::start_network_thread(
             "192.168.43.1:20884",
             robot.clone(),
             gamepad_one.clone(),
             gamepad_two.clone(),
+            popup_sender,
             args.export_telemetry,
         )
         .await;
@@ -106,6 +116,43 @@ impl App {
             .add_mappings(REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX)
             .build()
             .expect("Failed to build gilrs object");
+
+        //
+        let stacktrace = String::from(
+            r#"java.lang.IllegalArgumentException: Unable to find a hardware device with name "leftForward" and type DcMotor
+	at com.qualcomm.robotcore.hardware.HardwareMap.get(HardwareMap.java:213)
+	at org.firstinspires.ftc.teamcode.Hardware.init(Hardware.java:38)
+	at org.firstinspires.ftc.teamcode.opmodes.DrivetrainTest.runOpMode(DrivetrainTest.java:20)
+	at com.qualcomm.robotcore.eventloop.opmode.LinearOpMode.internalRunOpMode(LinearOpMode.java:199)
+	at com.qualcomm.robotcore.eventloop.opmode.OpModeInternal.lambda$internalInit$1$com-qualcomm-robotcore-eventloop-opmode-OpModeInternal(OpModeInternal.java:181)
+	at com.qualcomm.robotcore.eventloop.opmode.OpModeInternal$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.qualcomm.robotcore.util.ThreadPool.logThreadLifeCycle(ThreadPool.java:737)
+	at com.qualcomm.robotcore.eventloop.opmode.OpModeInternal.lambda$internalInit$2$com-qualcomm-robotcore-eventloop-opmode-OpModeInternal(OpModeInternal.java:179)
+	at com.qualcomm.robotcore.eventloop.opmode.OpModeInternal$$ExternalSyntheticLambda1.run(D8$$SyntheticClass:0)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1133)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:607)
+	at com.qualcomm.robotcore.util.ThreadPool$ThreadFactoryImpl$1.run(ThreadPool.java:793)
+	at java.lang.Thread.run(Thread.java:761"#,
+        );
+
+        let mut lines = Vec::new();
+
+        let first_line = Line::from("Received stacktrace from the robot:\n")
+            .style(Style::default().fg(TEXT_COLOR));
+
+        lines.push(first_line);
+        lines.push(Line::from(""));
+
+        for line in stacktrace.split('\n') {
+            lines.push(Line::from(line.to_string()).style(Style::default().fg(WARNING_COLOR)));
+        }
+
+        let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+        let popup = Arc::new(Mutex::new(InfoPopup {
+            text: paragraph,
+            scroll: 0,
+        }));
+        //
 
         App {
             socket,
@@ -121,7 +168,8 @@ impl App {
             gamepad_two,
             mode: AppMode::Normal,
             current_command: String::with_capacity(32),
-            active_popup: None,
+            active_popup: Some(popup),
+            popup_receiver,
         }
     }
 
@@ -133,6 +181,11 @@ impl App {
 
         while self.running {
             last_frame = std::time::Instant::now();
+
+            // Check for popups from the network thread
+            if let Ok(popup) = self.popup_receiver.try_recv() {
+                self.active_popup = Some(popup);
+            }
 
             terminal.draw(|frame| futures::executor::block_on(self.render(frame)))?;
 

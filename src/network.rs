@@ -16,6 +16,7 @@ use crate::{
             CommandPacketData, INIT_OPMODE, NOTIFY_ACTIVE_CONFIGURATION, NOTIFY_INIT_OPMODE,
             NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES, NOTIFY_RUN_OPMODE, OPMODE_STOP, OpModeData,
             REQUEST_ACTIVE_CONFIGURATION, REQUEST_OP_MODES, RobotConfigurationFile,
+            SHOW_STACKTRACE,
         },
         telemetry_packet::{
             ROBOT_BATTERY_LEVEL_KEY, ROBOT_CONTROLLER_BATTERY_STATUS_KEY, SYSTEM_ERROR_KEY,
@@ -25,10 +26,20 @@ use crate::{
         traits::{Readable, Writeable},
     },
     input::Gamepad,
+    popup::{InfoPopup, Popup},
+    renderers::styles::{TEXT_COLOR, WARNING_COLOR},
     robot::Robot,
 };
+use ratatui::{
+    style::Style,
+    text::{Line, Span},
+    widgets::{Paragraph, Wrap},
+};
 use serde::{Deserialize, Serialize};
-use tokio::{net::UdpSocket, sync::RwLock};
+use tokio::{
+    net::UdpSocket,
+    sync::{Mutex, RwLock},
+};
 
 /// Structure of the telemetry log entries
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -150,6 +161,9 @@ pub struct NetworkHandler {
     pub gamepad_one: Arc<RwLock<Option<Gamepad>>>,
     pub gamepad_two: Arc<RwLock<Option<Gamepad>>>,
 
+    /// A producer to give the render thread popups
+    pub popup_producer: tokio::sync::mpsc::Sender<Arc<Mutex<dyn Popup>>>,
+
     /// Whether to specially log telemetry we receive
     pub log_telemetry: bool,
 }
@@ -160,6 +174,7 @@ pub async fn start_network_thread(
     robot: Arc<RwLock<Robot>>,
     gamepad_one: Arc<RwLock<Option<Gamepad>>>,
     gamepad_two: Arc<RwLock<Option<Gamepad>>>,
+    popup_producer: tokio::sync::mpsc::Sender<Arc<Mutex<dyn Popup>>>,
     log_telemetry: bool,
 ) -> (Arc<RwLock<SharedNetworkData>>, Arc<UdpSocket>) {
     log::debug!("Trying to connect to {}..", remote_addr);
@@ -199,6 +214,7 @@ pub async fn start_network_thread(
         gamepad_one,
         gamepad_two,
         log_telemetry,
+        popup_producer,
     };
 
     tokio::task::spawn(async move { network_handler.network_thread().await });
@@ -788,6 +804,31 @@ impl NetworkHandler {
                 robot_write.active_opmode_state = Some(RobotOpmodeState::Running);
 
                 drop(robot_write);
+            }
+            SHOW_STACKTRACE => {
+                let mut lines = Vec::new();
+
+                let first_line = Line::from("Received stacktrace from the robot:\n")
+                    .style(Style::default().fg(TEXT_COLOR));
+
+                lines.push(first_line);
+                lines.push(Line::from(""));
+
+                for line in packet.data.split('\n') {
+                    lines.push(
+                        Line::from(line.to_string()).style(Style::default().fg(WARNING_COLOR)),
+                    );
+                }
+
+                let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+
+                self.popup_producer
+                    .send(Arc::new(Mutex::new(InfoPopup {
+                        text: paragraph,
+                        scroll: 0,
+                    })))
+                    .await
+                    .unwrap();
             }
             _ => {
                 log::warn!(
