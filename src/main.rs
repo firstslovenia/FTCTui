@@ -5,6 +5,7 @@ use clap::Parser;
 use simplelog::{CombinedLogger, Config, LevelFilter, WriteLogger};
 
 pub mod app;
+pub mod command;
 pub mod ftc_dashboard;
 pub mod ftc_proto;
 pub mod gamepad_map;

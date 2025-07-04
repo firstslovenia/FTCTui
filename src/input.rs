@@ -222,9 +222,8 @@ impl App {
             // Submit command
             (_, KeyCode::Enter) => {
                 self.mode = AppMode::Normal;
+                self.submit_command(self.current_command.clone()).await;
                 self.current_command.clear();
-
-                todo!();
             }
 
             // Delete one character
@@ -233,9 +232,7 @@ impl App {
             }
 
             (_, KeyCode::Char(char)) => {
-                if char.is_alphanumeric() || char == ' ' {
-                    self.current_command.push(char);
-                }
+                self.current_command.push(char);
             }
             _ => {}
         }
