@@ -3,7 +3,12 @@ use std::{sync::Arc, time::SystemTime};
 use color_eyre::eyre::Result;
 use gilrs::{Gilrs, GilrsBuilder};
 use lazy_static::lazy_static;
-use ratatui::{DefaultTerminal, widgets::ListState};
+use ratatui::{
+    DefaultTerminal,
+    style::Style,
+    text::Line,
+    widgets::{ListState, Paragraph, Wrap},
+};
 use tokio::{
     net::UdpSocket,
     sync::{Mutex, RwLock},
@@ -17,7 +22,8 @@ use crate::{
     gamepad_map::REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX,
     input::Gamepad,
     network::{SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
-    popup::Popup,
+    popup::{InfoPopup, Popup},
+    renderers::styles::{TEXT_COLOR, WARNING_COLOR},
     robot::Robot,
 };
 

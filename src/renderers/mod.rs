@@ -672,8 +672,43 @@ impl App {
             .border_style(block_style())
             .padding(Padding::new(2, 2, 1, 1));
 
-        let vertical = Layout::vertical([Constraint::Percentage(20)]).flex(Flex::Center);
-        let horizontal = Layout::horizontal([Constraint::Percentage(60)]).flex(Flex::Center);
+        let mut horizontal = Layout::horizontal([Constraint::Percentage(30)]).flex(Flex::Center);
+        let mut vertical = Layout::vertical([Constraint::Percentage(20)]).flex(Flex::Center);
+
+        // Build it to test the width..
+        let [area] = vertical.areas(frame.area());
+        let [area] = horizontal.areas(area);
+
+        let block_inner_area = block.inner(area);
+
+        let wanted_width = popup.text().line_width() as u16;
+        if wanted_width > block_inner_area.width {
+            // Too big, do 90%
+            if wanted_width > frame.area().width {
+                horizontal = Layout::horizontal([Constraint::Percentage(75)]).flex(Flex::Center);
+            } else {
+                horizontal =
+                    Layout::horizontal([Constraint::Length(wanted_width + 4)]).flex(Flex::Center);
+            }
+        }
+
+        // Test the height..
+        let [area] = vertical.areas(frame.area());
+        let [area] = horizontal.areas(area);
+
+        let block_inner_area = block.inner(area);
+
+        let lines = popup
+            .text()
+            .line_count(block_inner_area.width.saturating_sub(4)) as u16;
+
+        if lines > frame.area().height {
+            vertical = Layout::vertical([Constraint::Percentage(75)]).flex(Flex::Center);
+        } else {
+            vertical = Layout::vertical([Constraint::Length(lines + 3)]).flex(Flex::Center);
+        }
+
+        // Build it properly
         let [area] = vertical.areas(frame.area());
         let [area] = horizontal.areas(area);
 
@@ -684,6 +719,7 @@ impl App {
 
         frame.render_widget(Clear, area);
         frame.render_widget(block, area);
+        frame.render_widget(Clear, block_inner_area);
         frame.render_widget(popup.text(), block_inner_area);
         // Todo: add options
     }
