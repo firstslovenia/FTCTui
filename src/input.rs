@@ -56,7 +56,7 @@ impl App {
         // Universal, always active key handlers
         match (key.modifiers, key.code) {
             // Quit handler
-            (_, KeyCode::Esc | KeyCode::Char('q'))
+            (_, KeyCode::Char('q'))
             | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit().await,
 
             // Change modes into command mode
