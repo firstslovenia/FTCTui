@@ -1,8 +1,8 @@
 use std::fs::File;
 
 use app::App;
-use simplelog::{CombinedLogger, Config, LevelFilter, WriteLogger};
 use clap::Parser;
+use simplelog::{CombinedLogger, Config, LevelFilter, WriteLogger};
 
 pub mod app;
 pub mod ftc_dashboard;
@@ -11,6 +11,7 @@ pub mod gamepad_map;
 pub mod input;
 pub mod r#match;
 pub mod network;
+pub mod popup;
 pub mod renderers;
 pub mod robot;
 
@@ -30,7 +31,7 @@ async fn main() -> color_eyre::Result<()> {
     )])
     .unwrap();
 
-	 let args = Args::parse();
+    let args = Args::parse();
 
     let app = App::new(args).await;
 

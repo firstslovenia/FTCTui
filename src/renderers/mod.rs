@@ -1,9 +1,9 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Flex, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, List, ListItem, Padding, Paragraph, Wrap},
+    widgets::{Block, Clear, List, ListItem, Padding, Paragraph, Wrap},
 };
 use styles::{
     ERROR_COLOR, MUTED_TEXT_COLOR, PRIMARY_COLOR_LIGHTER, SELECTED_BACKGROUND, SUCCESS_COLOR,
@@ -150,6 +150,8 @@ impl App {
             self.create_gamepads_paragraph().await,
             gamepads_block.inner(bottom_inner_layout[1]),
         );
+
+        self.render_popup_if_any(frame).await;
 
         // Render the vim-like command thingy
         if self.mode == AppMode::InsertCommand {
@@ -654,5 +656,34 @@ impl App {
         Paragraph::new(text)
             .wrap(Wrap { trim: false })
             .scroll((self.telemetry_display_scroll, 0))
+    }
+
+    /// Renders a popup
+    pub async fn render_popup_if_any(&self, frame: &mut Frame<'_>) {
+        let Some(popup) = self.active_popup.clone() else {
+            return;
+        };
+
+        let popup = popup.lock().await;
+
+        let block = Block::bordered()
+			   .title("Alert (enter to close)")
+            .border_style(block_style())
+            .padding(Padding::new(2, 2, 1, 1));
+
+        let vertical = Layout::vertical([Constraint::Percentage(20)]).flex(Flex::Center);
+        let horizontal = Layout::horizontal([Constraint::Percentage(60)]).flex(Flex::Center);
+        let [area] = vertical.areas(frame.area());
+        let [area] = horizontal.areas(area);
+
+        let block_inner_area = block.inner(area);
+
+        //let inner_layout =
+        //    Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).split(block_inner_area);
+
+        frame.render_widget(Clear, area);
+        frame.render_widget(block, area);
+        frame.render_widget(popup.text(), block_inner_area);
+        // Todo: add options
     }
 }

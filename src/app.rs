@@ -3,8 +3,14 @@ use std::{sync::Arc, time::SystemTime};
 use color_eyre::eyre::Result;
 use gilrs::{Gilrs, GilrsBuilder};
 use lazy_static::lazy_static;
-use ratatui::{DefaultTerminal, widgets::ListState};
-use tokio::{net::UdpSocket, sync::RwLock};
+use ratatui::{
+    DefaultTerminal,
+    widgets::{ListState, Paragraph, Wrap},
+};
+use tokio::{
+    net::UdpSocket,
+    sync::{Mutex, RwLock},
+};
 
 use crate::{
     Args,
@@ -14,6 +20,7 @@ use crate::{
     gamepad_map::REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX,
     input::Gamepad,
     network::{SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
+    popup::{InfoPopup, Popup},
     robot::Robot,
 };
 
@@ -64,6 +71,9 @@ pub struct App {
     /// See [AppMode]
     pub mode: AppMode,
 
+    /// Our active popup, if we have one
+    pub active_popup: Option<Arc<Mutex<dyn Popup>>>,
+
     /// Handle of our gamepad input handler
     pub gilrs: Gilrs,
     pub gamepad_one: Arc<RwLock<Option<Gamepad>>>,
@@ -111,6 +121,7 @@ impl App {
             gamepad_two,
             mode: AppMode::Normal,
             current_command: String::with_capacity(32),
+            active_popup: None,
         }
     }
 

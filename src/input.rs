@@ -50,12 +50,59 @@ impl App {
     }
 
     /// Handles the key events and updates the state of [`App`] when in normal mode.
+    ///
+    /// Normal mode is also the only which supports interacting with popups.
     pub async fn on_normal_mode_key_event(&mut self, key: KeyEvent) {
+        // Universal, always active key handlers
         match (key.modifiers, key.code) {
             // Quit handler
             (_, KeyCode::Esc | KeyCode::Char('q'))
             | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit().await,
 
+            // Change modes into command mode
+            (_, KeyCode::Char(':')) => {
+                self.mode = AppMode::InsertCommand;
+                self.current_command.clear();
+            }
+
+            _ => {}
+        }
+
+        // Popup key handlers
+        if let Some(popup) = self.active_popup.clone() {
+            match (key.modifiers, key.code) {
+                // Submit
+                (_, KeyCode::Enter) => {
+                    popup.lock().await.submit(self);
+                    self.active_popup = None;
+                }
+
+                // Move selected option forwards and backwards
+                (_, KeyCode::Tab) | (_, KeyCode::Right) => {
+                    popup.lock().await.select_next_option();
+                }
+
+                (_, KeyCode::BackTab) | (_, KeyCode::Left) => {
+                    popup.lock().await.select_previous_option();
+                }
+
+                // Scrolls up and down
+                (_, KeyCode::Up) | (_, KeyCode::Char('k')) => {
+                    popup.lock().await.scroll_up();
+                }
+
+                (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
+                    popup.lock().await.scroll_down();
+                }
+
+                _ => {}
+            }
+
+            return;
+        }
+
+        // Handlers when we don't have any popups
+        match (key.modifiers, key.code) {
             // Main action button
             (_, KeyCode::Enter) => match self.selected_block {
                 AUTO_BLOCK_ID | TELEOP_BLOCK_ID => {
@@ -159,12 +206,6 @@ impl App {
                 }
                 _ => {}
             },
-
-            // Change modes into command mode
-            (_, KeyCode::Char(':')) => {
-                self.mode = AppMode::InsertCommand;
-                self.current_command.clear();
-            }
             _ => {}
         }
     }
