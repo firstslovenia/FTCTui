@@ -32,14 +32,13 @@ use crate::{
 };
 use ratatui::{
     style::Style,
-    text::{Line, Span},
+    text::Line,
     widgets::{Paragraph, Wrap},
 };
 use serde::{Deserialize, Serialize};
-use tokio::{
-    net::UdpSocket,
-    sync::{Mutex, RwLock},
-};
+use tokio::net::UdpSocket;
+
+use async_lock::{Mutex, RwLock};
 
 /// Structure of the telemetry log entries
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,7 +161,7 @@ pub struct NetworkHandler {
     pub gamepad_two: Arc<RwLock<Option<Gamepad>>>,
 
     /// A producer to give the render thread popups
-    pub popup_producer: tokio::sync::mpsc::Sender<Arc<Mutex<dyn Popup>>>,
+    pub popup_producer: async_channel::Sender<Arc<Mutex<dyn Popup>>>,
 
     /// Whether to specially log telemetry we receive
     pub log_telemetry: bool,
@@ -172,9 +171,9 @@ pub struct NetworkHandler {
 pub async fn start_network_thread(
     remote_addr: &str,
     robot: Arc<RwLock<Robot>>,
-    gamepad_one: Arc<RwLock<Option<Gamepad>>>,
-    gamepad_two: Arc<RwLock<Option<Gamepad>>>,
-    popup_producer: tokio::sync::mpsc::Sender<Arc<Mutex<dyn Popup>>>,
+    gamepad_one: Arc<async_lock::RwLock<Option<Gamepad>>>,
+    gamepad_two: Arc<async_lock::RwLock<Option<Gamepad>>>,
+    popup_producer: async_channel::Sender<Arc<Mutex<dyn Popup>>>,
     log_telemetry: bool,
 ) -> (Arc<RwLock<SharedNetworkData>>, Arc<UdpSocket>) {
     log::debug!("Trying to connect to {}..", remote_addr);
@@ -227,6 +226,7 @@ pub async fn start_network_thread(
 pub const RECEIVE_BUFFER_SIZE: usize = 16000;
 
 impl NetworkHandler {
+    #[allow(unreachable_code)]
     pub async fn network_thread(&mut self) {
         let mut last_gamepad_update = std::time::Instant::now();
         let mut last_time_request_packet = std::time::Instant::now();
@@ -320,7 +320,7 @@ impl NetworkHandler {
                             Some(mut packet) => {
                                 match packet.packet_type {
                                              PacketType::Time => {
-                                                let Some(data) = TimePacketData::read_from(&mut packet.data) else {
+                                                let Some(_data) = TimePacketData::read_from(&mut packet.data) else {
                                                     log::warn!("Failed to deserialize time packet: {:?}", recv_buffer[0..num_bytes].to_vec());
                                                                     continue;
                                                 };

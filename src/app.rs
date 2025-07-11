@@ -1,29 +1,27 @@
 use std::{sync::Arc, time::SystemTime};
 
 use color_eyre::eyre::Result;
-use gilrs::{Gilrs, GilrsBuilder};
+use futures::StreamExt;
+use gilrs::GilrsBuilder;
 use lazy_static::lazy_static;
 use ratatui::{
     DefaultTerminal,
-    style::Style,
-    text::Line,
-    widgets::{ListState, Paragraph, Wrap},
+    crossterm::event::{self, Event, KeyEventKind},
+    widgets::ListState,
 };
-use tokio::{
-    net::UdpSocket,
-    sync::{Mutex, RwLock},
-};
+use tokio::net::UdpSocket;
+
+use async_lock::{Mutex, RwLock};
 
 use crate::{
     Args,
     ftc_proto::robot_command::{
         CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
     },
-    gamepad_map::REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX,
+    gamepad_map::{self, AsyncGilrs, REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX},
     input::Gamepad,
     network::{SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
-    popup::{InfoPopup, Popup},
-    renderers::styles::{TEXT_COLOR, WARNING_COLOR},
+    popup::Popup,
     robot::Robot,
 };
 
@@ -78,10 +76,13 @@ pub struct App {
     pub active_popup: Option<Arc<Mutex<dyn Popup>>>,
 
     /// A receiver to get popups from the network thread
-    pub popup_receiver: tokio::sync::mpsc::Receiver<Arc<Mutex<dyn Popup>>>,
+    pub popup_receiver: async_channel::Receiver<Arc<Mutex<dyn Popup>>>,
 
     /// Handle of our gamepad input handler
-    pub gilrs: Gilrs,
+    pub gilrs: AsyncGilrs,
+
+    // Note: these are async_lock, because they need to be higher performance (mostly for
+    // rendering & network stuff) than all other locks
     pub gamepad_one: Arc<RwLock<Option<Gamepad>>>,
     pub gamepad_two: Arc<RwLock<Option<Gamepad>>>,
 }
@@ -96,11 +97,11 @@ impl App {
 
         let robot = Arc::new(RwLock::new(Robot::new_empty()));
 
-        let gamepad_one = Arc::new(RwLock::new(None));
-        let gamepad_two = Arc::new(RwLock::new(None));
+        let gamepad_one = Arc::new(async_lock::RwLock::new(None));
+        let gamepad_two = Arc::new(async_lock::RwLock::new(None));
 
         // Channel so the network thread can send us popups
-        let (popup_sender, popup_receiver) = tokio::sync::mpsc::channel(8);
+        let (popup_sender, popup_receiver) = async_channel::bounded(8);
 
         let (network_debug_data, socket) = crate::network::start_network_thread(
             "192.168.43.1:20884",
@@ -112,10 +113,7 @@ impl App {
         )
         .await;
 
-        let gilrs = GilrsBuilder::new()
-            .add_mappings(REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX)
-            .build()
-            .expect("Failed to build gilrs object");
+        let gilrs = Self::create_gilrs();
 
         App {
             socket,
@@ -140,26 +138,64 @@ impl App {
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         self.running = true;
 
+        // Create a thread so we can actually await crossterm events
+        let (crossterm_sender, crossterm_receiver) = async_channel::bounded(16);
+
+        tokio::spawn(async move {
+            loop {
+                let event = event::read().unwrap();
+
+                crossterm_sender.send(event).await.unwrap();
+            }
+        });
+
         let mut last_frame;
 
         while self.running {
             last_frame = std::time::Instant::now();
 
-            // Check for popups from the network thread
-            if let Ok(popup) = self.popup_receiver.try_recv() {
-                self.active_popup = Some(popup);
-            }
-
-            terminal.draw(|frame| futures::executor::block_on(self.render(frame)))?;
-
-            self.handle_crossterm_events().await?;
             self.update_gamepads().await;
 
-            // Lock at 30 fps
-            tokio::time::sleep_until((last_frame + std::time::Duration::from_millis(33)).into())
-                .await;
+            terminal.draw(|frame| self.render(frame))?;
+
+            tokio::select! {
+               // We have crossterm events that need handling
+               Ok(event) = crossterm_receiver.recv() => {
+                     match event {
+                        // avoid handling key release events
+                        Event::Key(key) if key.kind == KeyEventKind::Press => self.on_key_event(key).await,
+                        Event::Mouse(_) => {}
+                        Event::Resize(_, _) => {}
+                        _ => {}
+                    }
+               }
+
+               // We have gilrs events that need handling
+               Some(event) = self.gilrs.next() => {
+                        self.gilrs.0.update(&event);
+               }
+
+               // Check for popups from the network thread
+               Ok(popup) = self.popup_receiver.recv() => {
+                  self.active_popup = Some(popup);
+               }
+
+               // If nothing is happening, just lock @ 30 fps
+               _ = tokio::time::sleep_until((last_frame + std::time::Duration::from_millis(1000 / 30)).into()) => {}
+            }
         }
         Ok(())
+    }
+
+    /// Creates a [Gilrs] instance with our config
+    fn create_gilrs() -> AsyncGilrs {
+        gamepad_map::AsyncGilrs(
+            GilrsBuilder::new()
+                .add_mappings(REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX)
+                .set_update_state(false)
+                .build()
+                .expect("Failed to build gilrs object"),
+        )
     }
 
     /// Returns a sorted list of opmodes

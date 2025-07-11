@@ -11,11 +11,6 @@ pub mod traits;
 
 pub mod test_deserializer {
 
-    use std::fs::File;
-
-    use log::LevelFilter;
-    use simplelog::{CombinedLogger, Config, WriteLogger};
-
     use super::{
         gamepad_packet::GamepadPacketData,
         heartbeat_packet::HeartbeatPacketData,
@@ -31,10 +26,7 @@ pub mod test_deserializer {
         let mut success: usize = 0;
         let mut i: usize = 0;
 
-        let mut binary =
-            tokio::fs::read("secret path to .bin file")
-                .await
-                .unwrap();
+        let mut binary = tokio::fs::read("secret path to .bin file").await.unwrap();
 
         let started = tokio::time::Instant::now();
 

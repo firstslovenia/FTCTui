@@ -1,7 +1,4 @@
-use std::time::Duration;
-
-use color_eyre::eyre::Result;
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     App,
@@ -18,29 +15,7 @@ use crate::{
 
 use gilrs::{Axis, Button, GamepadId, Gilrs, MappingSource};
 
-static DEBUG_GILRS_EVENTS: bool = true;
-
 impl App {
-    /// Reads the crossterm events and updates the state of [`App`].
-    ///
-    /// If your application needs to perform work in between handling events, you can use the
-    /// [`event::poll`] function to check if there are any events available with a timeout.
-    pub async fn handle_crossterm_events(&mut self) -> Result<()> {
-        // Return if there are no events
-        if !event::poll(Duration::from_millis(10)).unwrap() {
-            return Ok(());
-        }
-
-        match event::read()? {
-            // it's important to check KeyEventKind::Press to avoid handling key release events
-            Event::Key(key) if key.kind == KeyEventKind::Press => self.on_key_event(key).await,
-            Event::Mouse(_) => {}
-            Event::Resize(_, _) => {}
-            _ => {}
-        }
-        Ok(())
-    }
-
     /// Handles the key events and updates the state of [`App`].
     pub async fn on_key_event(&mut self, key: KeyEvent) {
         match self.mode {
@@ -240,7 +215,7 @@ impl App {
 
     /// Checks if there are any new gamepads / if any have disconnected and updates self if there are
     pub async fn update_gamepads(&mut self) {
-        let gamepads: Vec<(GamepadId, gilrs::Gamepad)> = self.gilrs.gamepads().collect();
+        let gamepads: Vec<(GamepadId, gilrs::Gamepad)> = self.gilrs.0.gamepads().collect();
         let gamepad_ids: Vec<GamepadId> = gamepads.clone().iter().map(|x| x.0).collect();
 
         let mut gamepad_one = self.gamepad_one.write().await;
@@ -251,7 +226,7 @@ impl App {
             if !gamepad_ids.contains(&gamepad.id) {
                 *gamepad_one = None;
             } else {
-                let gamepad = self.gilrs.gamepad(gamepad.id);
+                let gamepad = self.gilrs.0.gamepad(gamepad.id);
 
                 if gamepad.is_pressed(Button::Start) && gamepad.is_pressed(Button::West) {
                     *gamepad_one = None;
@@ -263,7 +238,7 @@ impl App {
             if !gamepad_ids.contains(&gamepad.id) {
                 *gamepad_two = None;
             } else {
-                let gamepad = self.gilrs.gamepad(gamepad.id);
+                let gamepad = self.gilrs.0.gamepad(gamepad.id);
 
                 if gamepad.is_pressed(Button::Start) && gamepad.is_pressed(Button::West) {
                     *gamepad_two = None;
@@ -272,7 +247,7 @@ impl App {
         }
 
         // Check for assigning new gamepads
-        for (id, gamepad) in self.gilrs.gamepads() {
+        for (id, gamepad) in self.gilrs.0.gamepads() {
             if gamepad.mapping_source() == MappingSource::None {
                 continue;
             }
@@ -289,7 +264,7 @@ impl App {
             if gamepad.is_pressed(Button::Start) && gamepad.is_pressed(Button::South) {
                 *gamepad_one = Some(Gamepad {
                     id,
-                    last_state: Gamepad::map_to_gamepad_packet_data(id, 1, &self.gilrs),
+                    last_state: Gamepad::map_to_gamepad_packet_data(id, 1, &self.gilrs.0),
                 });
 
                 if let Some(gp_two) = &*gamepad_two {
@@ -302,7 +277,7 @@ impl App {
             else if gamepad.is_pressed(Button::Start) && gamepad.is_pressed(Button::East) {
                 *gamepad_two = Some(Gamepad {
                     id,
-                    last_state: Gamepad::map_to_gamepad_packet_data(id, 2, &self.gilrs),
+                    last_state: Gamepad::map_to_gamepad_packet_data(id, 2, &self.gilrs.0),
                 });
 
                 if let Some(gp_one) = &*gamepad_one {
@@ -313,61 +288,13 @@ impl App {
             }
         }
 
-        // TODO: update when we have an input!
-        while let Some(event) = self.gilrs.next_event() {
-            if DEBUG_GILRS_EVENTS {
-                match event.event {
-                    gilrs::EventType::ButtonPressed(button, code) => {
-                        log::info!(
-                            "Event ButtonPresed: {:?} - code {}",
-                            button,
-                            serde_json::to_string(&code).unwrap()
-                        );
-                    }
-                    gilrs::EventType::ButtonRepeated(button, code) => {
-                        log::info!(
-                            "Event ButtonRepeated: {:?} - code {}",
-                            button,
-                            serde_json::to_string(&code).unwrap()
-                        );
-                    }
-                    gilrs::EventType::ButtonReleased(button, code) => {
-                        log::info!(
-                            "Event ButtonReleased: {:?} - code {}",
-                            button,
-                            serde_json::to_string(&code).unwrap()
-                        );
-                    }
-                    gilrs::EventType::ButtonChanged(button, value, code) => {
-                        log::info!(
-                            "Event ButtonChanged: {:?} @ {} - code {}",
-                            button,
-                            value,
-                            serde_json::to_string(&code).unwrap()
-                        );
-                    }
-                    gilrs::EventType::AxisChanged(axis, value, code) => {
-                        log::info!(
-                            "Event AxisChanged: {:?} @ {} - code {}",
-                            axis,
-                            value,
-                            serde_json::to_string(&code).unwrap()
-                        );
-                    }
-                    _ => {
-                        log::info!("Event {:?}", event);
-                    }
-                }
-            }
-        }
-
         // Update our own states
         if let Some(gamepad) = &mut *gamepad_one {
-            gamepad.last_state = Gamepad::map_to_gamepad_packet_data(gamepad.id, 1, &self.gilrs);
+            gamepad.last_state = Gamepad::map_to_gamepad_packet_data(gamepad.id, 1, &self.gilrs.0);
         }
 
         if let Some(gamepad) = &mut *gamepad_two {
-            gamepad.last_state = Gamepad::map_to_gamepad_packet_data(gamepad.id, 2, &self.gilrs);
+            gamepad.last_state = Gamepad::map_to_gamepad_packet_data(gamepad.id, 2, &self.gilrs.0);
         }
     }
 }

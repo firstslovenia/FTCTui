@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ratatui::widgets::Paragraph;
-use tokio::sync::Mutex;
+use async_lock::Mutex;
 
 use crate::{app::App, popup::InfoPopup};
 

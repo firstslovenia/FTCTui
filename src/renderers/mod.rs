@@ -29,7 +29,9 @@ impl App {
     ///
     /// - <https://docs.rs/ratatui/latest/ratatui/widgets/index.html>
     /// - <https://github.com/ratatui/ratatui/tree/main/ratatui-widgets/examples>
-    pub async fn render(&mut self, frame: &mut Frame<'_>) {
+    ///
+    /// Should NOT be async
+    pub fn render(&mut self, frame: &mut Frame<'_>) {
         let main_layout = match self.mode {
             AppMode::Normal => {
                 Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -128,31 +130,29 @@ impl App {
         frame.render_widget(&gamepads_block, bottom_inner_layout[1]);
 
         frame.render_widget(
-            self.create_debug_paragraph().await,
+            self.create_debug_paragraph(),
             debug_block.inner(top_inner_layout[0]),
         );
 
-        self.render_teleop_list(frame, teleop_block, top_inner_layout[1])
-            .await;
-        self.render_auto_list(frame, auto_block, top_inner_layout[2])
-            .await;
+        self.render_teleop_list(frame, teleop_block, top_inner_layout[1]);
+        self.render_auto_list(frame, auto_block, top_inner_layout[2]);
 
         frame.render_widget(
-            self.create_robot_paragraph().await,
+            self.create_robot_paragraph(),
             robot_block.inner(top_inner_layout[3]),
         );
 
         frame.render_widget(
-            self.create_active_opmode_paragraph().await,
+            self.create_active_opmode_paragraph(),
             active_opmode_block.inner(bottom_inner_layout[0]),
         );
 
         frame.render_widget(
-            self.create_gamepads_paragraph().await,
+            self.create_gamepads_paragraph(),
             gamepads_block.inner(bottom_inner_layout[1]),
         );
 
-        self.render_popup_if_any(frame).await;
+        self.render_popup_if_any(frame);
 
         // Render the vim-like command thingy
         if self.mode == AppMode::InsertCommand {
@@ -165,10 +165,10 @@ impl App {
     }
 
     /// Creates the gamepads debug text
-    pub async fn create_gamepads_paragraph(&mut self) -> Paragraph {
+    pub fn create_gamepads_paragraph(&mut self) -> Paragraph {
         let gamepads = vec![
-            self.gamepad_one.read().await.clone(),
-            self.gamepad_two.read().await.clone(),
+            futures::executor::block_on(self.gamepad_one.read()).clone(),
+            futures::executor::block_on(self.gamepad_two.read()).clone(),
         ];
 
         let mut gamepads_text: Vec<Line> = Vec::new();
@@ -178,7 +178,7 @@ impl App {
 
             if let Some(gamepad) = gamepad_option {
                 let state = gamepad.last_state.clone();
-                let gilrs_gamepad = self.gilrs.gamepad(gamepad.id);
+                let gilrs_gamepad = self.gilrs.0.gamepad(gamepad.id);
 
                 gamepads_text.push(Line::from(vec![
                     Span::styled(
@@ -348,10 +348,10 @@ impl App {
     }
 
     /// Creates the robot text
-    pub async fn create_robot_paragraph(&mut self) -> Paragraph {
+    pub fn create_robot_paragraph(&mut self) -> Paragraph {
         let mut robot_text: Vec<Line> = Vec::new();
 
-        let robot = self.robot.read().await;
+        let robot = futures::executor::block_on(self.robot.read());
 
         let Some(status) = &robot.active_opmode_state else {
             robot_text.push(Line::from(vec![Span::styled(
@@ -468,10 +468,10 @@ impl App {
     }
 
     /// Creates the debug text
-    pub async fn create_debug_paragraph(&mut self) -> Paragraph {
+    pub fn create_debug_paragraph(&mut self) -> Paragraph {
         let mut debug_text: Vec<Line> = Vec::new();
 
-        let shared_network_read = self.shared_network_data.read().await;
+        let shared_network_read = futures::executor::block_on(self.shared_network_data.read());
 
         let mut network_state_line = Vec::new();
 
@@ -526,17 +526,12 @@ impl App {
     }
 
     /// Creates the teleop opmode list
-    pub async fn render_teleop_list(
-        &mut self,
-        frame: &mut Frame<'_>,
-        block: Block<'_>,
-        rect: Rect,
-    ) {
+    pub fn render_teleop_list(&mut self, frame: &mut Frame<'_>, block: Block<'_>, rect: Rect) {
         let mut items: Vec<ListItem> = Vec::new();
 
-        let opmode_list = self.get_teleop_opmodes().await;
+        let opmode_list = futures::executor::block_on(self.get_teleop_opmodes());
 
-        let robot = self.robot.read().await;
+        let robot = futures::executor::block_on(self.robot.read());
 
         let active_opmode = robot.active_opmode.clone();
         let opmode_status = robot.active_opmode_state.clone();
@@ -581,12 +576,12 @@ impl App {
     }
 
     /// Creates the auto opmode list
-    pub async fn render_auto_list(&mut self, frame: &mut Frame<'_>, block: Block<'_>, rect: Rect) {
+    pub fn render_auto_list(&mut self, frame: &mut Frame<'_>, block: Block<'_>, rect: Rect) {
         let mut items: Vec<ListItem> = Vec::new();
 
-        let opmode_list = self.get_auto_opmodes().await;
+        let opmode_list = futures::executor::block_on(self.get_auto_opmodes());
 
-        let robot = self.robot.read().await;
+        let robot = futures::executor::block_on(self.robot.read());
 
         let active_opmode = robot.active_opmode.clone();
         let opmode_status = robot.active_opmode_state.clone();
@@ -631,10 +626,10 @@ impl App {
     }
 
     /// Creates the active opmode / telemetry paragraph
-    pub async fn create_active_opmode_paragraph(&mut self) -> Paragraph {
+    pub fn create_active_opmode_paragraph(&mut self) -> Paragraph {
         let mut text: Vec<Line> = Vec::new();
 
-        let robot = self.robot.read().await;
+        let robot = futures::executor::block_on(self.robot.read());
 
         for line in robot.telemetry_list.clone() {
             let line = line;
@@ -660,12 +655,12 @@ impl App {
     }
 
     /// Renders a popup
-    pub async fn render_popup_if_any(&self, frame: &mut Frame<'_>) {
+    pub fn render_popup_if_any(&self, frame: &mut Frame<'_>) {
         let Some(popup) = self.active_popup.clone() else {
             return;
         };
 
-        let popup = popup.lock().await;
+        let popup = futures::executor::block_on(popup.lock());
 
         let block = Block::bordered()
             .title("Alert (enter to close)")

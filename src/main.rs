@@ -18,7 +18,9 @@ pub mod robot;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Args {
+pub struct Args {
+    /// Whether or not to export receieved telemetry packets as a file called telemetry_log.json
+    /// in the directory the app is ran
     #[arg(short, long, default_value_t = false)]
     export_telemetry: bool,
 }
@@ -40,5 +42,10 @@ async fn main() -> color_eyre::Result<()> {
     let terminal = ratatui::init();
     let result = app.run(terminal).await;
     ratatui::restore();
+
+    if result.is_ok() {
+        std::process::exit(0);
+    }
+
     result
 }
