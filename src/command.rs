@@ -76,7 +76,7 @@ impl App {
 
                 self.show_toast(string);
             }
-            "initopmode" => {
+            "initopmode" | "init" => {
                 if args.len() < 2 {
                     self.show_toast("Expected name of opmode to initialize".to_string());
                     return;
@@ -84,7 +84,7 @@ impl App {
 
                 self.init_opmode(args[1].clone()).await;
             }
-            "startopmode" => {
+            "startopmode" | "runopmode" | "run" | "start" => {
                 if args.len() < 2 {
                     self.show_toast("Expected name of opmode to start".to_string());
                     return;
