@@ -172,7 +172,12 @@ impl App {
 
                // We have gilrs events that need handling
                Some(event) = self.gilrs.next() => {
-                        self.gilrs.0.update(&event);
+                  self.gilrs.0.update(&event);
+
+                  // Handle all of them, if we have multiple
+                  while let Some(e) = self.gilrs.0.next_event() {
+                     self.gilrs.0.update(&e);
+                  }
                }
 
                // Check for popups from the network thread
