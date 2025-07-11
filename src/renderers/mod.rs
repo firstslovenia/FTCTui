@@ -700,7 +700,7 @@ impl App {
         if lines > frame.area().height {
             vertical = Layout::vertical([Constraint::Percentage(75)]).flex(Flex::Center);
         } else {
-            vertical = Layout::vertical([Constraint::Length(lines + 3)]).flex(Flex::Center);
+            vertical = Layout::vertical([Constraint::Length(lines + 4)]).flex(Flex::Center);
         }
 
         // Build it properly
