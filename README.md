@@ -43,8 +43,8 @@ Currently:
 - telemetry
 
 Planned:
-- #6
-- #1
+- [creating, viewing, editing configurations](https://github.com/firstslovenia/FTCTui/issues/6)
+- [match timer and sfx](https://github.com/firstslovenia/FTCTui/issues/1)
 
 Out of scope:
 - connecting via Wi-Fi direct
