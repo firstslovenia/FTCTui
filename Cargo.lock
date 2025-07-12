@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "ftctui"
-version = "0.1.0-beta1"
+version = "0.1.0-beta"
 dependencies = [
  "async-channel",
  "async-lock",
@@ -568,7 +568,8 @@ dependencies = [
 [[package]]
 name = "gilrs"
 version = "0.11.0"
-source = "git+https://gitlab.com/gilrs-project/gilrs.git#d66688c5710ec498131c73b38fb47a03c99efcb3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb2c998745a3c1ac90f64f4f7b3a54219fd3612d7705e7798212935641ed18f"
 dependencies = [
  "fnv",
  "gilrs-core",
@@ -581,7 +582,8 @@ dependencies = [
 [[package]]
 name = "gilrs-core"
 version = "0.6.4"
-source = "git+https://gitlab.com/gilrs-project/gilrs.git#d66688c5710ec498131c73b38fb47a03c99efcb3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6d95ae10ce5aa99543a28cf74e41c11f3b9e3c14f0452bbde46024753cd683e"
 dependencies = [
  "core-foundation",
  "inotify",

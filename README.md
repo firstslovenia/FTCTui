@@ -3,9 +3,9 @@
 	<img src="assets/logo.png" alt="project logo, looks like a shell prompt" height="160px"/>
 </p>
 
-<h1 align="center">FTC TUI</h1>
+<h1 align="center">FTC Tui</h1>
 
-FTC TUI is a desktop app written in rust which aims to be a drop-in replacement for REV Robotics' Driver hub / Driver Station app.
+FTC Tui is a desktop app written in rust which aims to be a drop-in replacement for REV Robotics' Driver hub / Driver Station app.
 
 For ease of development and performance reasons, it was created as a terminal user interface (TUI).
 
@@ -106,7 +106,7 @@ To unbind a connected gamepad, press the Option / Start button and the Square / 
 
 ### Command-line arguments
 
-FTCTUI supports passing a few extra options when running the app via command-line arguments.
+FTCTui supports passing a few extra options when running the app via command-line arguments.
 
 To use them, you'll need to run it manually from the terminal, such as with `.\ftctui.exe --option`, `./ftctui --option` or `ftctui --option`.
 
