@@ -9,6 +9,8 @@ FTC Tui is a desktop app written in rust which aims to be a drop-in replacement 
 
 For ease of development and performance reasons, it was created as a terminal user interface (TUI).
 
+<img src="assets/screenshot-old.png" alt="screenshot of the main ui"/>
+
 ## FAQ
 
 ### Why create this?
