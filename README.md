@@ -1,13 +1,13 @@
 
 <p align="center">
-	<img src="assets/logo.png" alt="project logo, looks like a shell prompt" height="160px"/>
+	<img src="assets/banner.png" alt="project banner, looks like a shell prompt" max-height="128px"/>
 </p>
 
 <h1 align="center">FTC Tui</h1>
 
  <p align="center">
     <br />
-    <a href="https://firsttech.si/docs/intro">Read the docs</a>
+    <a href="https://firsttech.si/docs/ftctui">Read the docs</a>
     <br />
  </p>
 
