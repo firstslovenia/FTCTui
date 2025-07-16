@@ -1,9 +1,7 @@
 
 <p align="center">
-	<img src="assets/banner.png" alt="project banner, looks like a shell prompt" max-height="128px"/>
+	<img src="assets/banner.png" alt="project banner, looks like a shell prompt with large text reading FTC Tui" max-height="128px"/>
 </p>
-
-<h1 align="center">FTC Tui</h1>
 
  <p align="center">
     <br />
@@ -134,7 +132,7 @@ The log file will be created at `ftctui.log`.
 
 You can pass the option `-e` or `--export-telemetry`, which will dump all telemetry packets into `telemetry_log.json` in the active directory.
 
-[Read more about how to use this file](https://firsttech.si/docs/intro)
+[Read more about how to use this file](https://firsttech.si/docs/ftctui/graphs-with-telemetry)
 
 ## Troubleshooting
 
