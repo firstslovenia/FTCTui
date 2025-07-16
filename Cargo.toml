@@ -7,6 +7,7 @@ edition = "2024"
 async-channel = "2.5.0"
 async-lock = "3.4.0"
 bitflags = "2.9.0"
+cfg-if = "1.0.1"
 clap = { version = "4.5", features = ["derive"] }
 clap_derive = { version = "4.0.0-rc.1" }
 

@@ -15,6 +15,7 @@ pub mod network;
 pub mod popup;
 pub mod renderers;
 pub mod robot;
+pub mod tty;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -36,6 +37,14 @@ pub struct Args {
     /// When submitting a bug report, please use trace if possible.
     #[arg(short, long)]
     log_level: Option<String>,
+
+    /// If provided, skips the check for whether we are in a terminal (on Linux).
+    ///
+    /// Does nothing on Windows.
+    ///
+    /// You should likely only use this if the tty check doesn't work
+    #[arg(long, default_value_t = false)]
+    skip_tty_check: bool,
 }
 
 #[tokio::main]
@@ -62,6 +71,16 @@ async fn main() -> color_eyre::Result<()> {
             File::create("ftctui.log").unwrap(),
         )])
         .unwrap();
+    }
+
+    cfg_if::cfg_if! {
+       if #[cfg(target_os = "linux")] {
+           if !args.skip_tty_check {
+               if !tty::is_a_tty() {
+                   tty::try_run_in_terminal();
+               }
+           }
+       }
     }
 
     let app = App::new(args).await;
