@@ -2,7 +2,9 @@ use std::fs::File;
 
 use app::App;
 use clap::Parser;
-use simplelog::{CombinedLogger, Config, LevelFilter, WriteLogger};
+use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger};
+
+use crate::ftc_proto::hardware::document::{try_parse_xml_document, write_xml_document};
 
 pub mod app;
 pub mod command;
@@ -65,13 +67,47 @@ async fn main() -> color_eyre::Result<()> {
             }
         };
 
-        CombinedLogger::init(vec![WriteLogger::new(
-            level_filter,
-            Config::default(),
-            File::create("ftctui.log").unwrap(),
-        )])
+        CombinedLogger::init(vec![
+            WriteLogger::new(
+                level_filter,
+                Config::default(),
+                File::create("ftctui.log").unwrap(),
+            ),
+            TermLogger::new(
+                LevelFilter::Trace,
+                Config::default(),
+                TerminalMode::Mixed,
+                simplelog::ColorChoice::Auto,
+            ),
+        ])
         .unwrap();
     }
+
+    let a = try_parse_xml_document(
+        r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<Robot type="FirstInspires-FTC">
+    <LynxUsbDevice name="Control Hub Portal" serialNumber="(embedded)" parentModuleAddress="173">
+        <LynxModule name="Control Hub" port="173">
+            <RevRoboticsCoreHexMotor name="backSideways" port="0" />
+            <RevRoboticsCoreHexMotor name="leftForward" port="1" />
+            <RevRoboticsCoreHexMotor name="frontSideways" port="2" />
+            <RevRoboticsCoreHexMotor name="rightForward" port="3" />
+            <ControlHubImuBHI260AP name="imu" port="0" bus="0" />
+        </LynxModule>
+    </LynxUsbDevice>
+</Robot>"#
+            .to_string(),
+        Vec::new(),
+    ).unwrap();
+
+    log::info!("{:?}", a);
+
+	 let b = write_xml_document(&a);
+
+    log::info!("{}", b);
+
+    std::process::exit(0);
+    return Ok(());
 
     cfg_if::cfg_if! {
        if #[cfg(target_os = "linux")] {

@@ -475,6 +475,7 @@ dependencies = [
  "tui-input",
  "wavy",
  "winresource",
+ "xml",
 ]
 
 [[package]]
@@ -1719,3 +1720,18 @@ dependencies = [
  "toml",
  "version_check",
 ]
+
+[[package]]
+name = "xml"
+version = "0.8.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ede1c99c55b4b3ad0349018ef0eccbe954ce9c342334410707ee87177fcf2ab4"
+dependencies = [
+ "xml-rs",
+]
+
+[[package]]
+name = "xml-rs"
+version = "0.8.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fd8403733700263c6eb89f192880191f1b83e332f7a20371ddcf421c4a337c7"
