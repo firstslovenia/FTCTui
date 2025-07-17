@@ -47,13 +47,19 @@ pub struct Args {
     /// You should likely only use this if the tty check doesn't work
     #[arg(long, default_value_t = false)]
     skip_tty_check: bool,
+
+    /// If provided, runs the experimental configuration test (instead of the actual program)
+    #[arg(long, default_value_t = false)]
+    experimental_configuration_things: bool,
 }
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let args = Args::parse();
 
-    if let Some(level) = args.log_level.clone() {
+    if let Some(level) = args.log_level.clone()
+        && !args.experimental_configuration_things
+    {
         let level_filter = match level.to_lowercase().as_str() {
             "error" => LevelFilter::Error,
             "warn" => LevelFilter::Warn,
@@ -67,9 +73,18 @@ async fn main() -> color_eyre::Result<()> {
             }
         };
 
+        CombinedLogger::init(vec![WriteLogger::new(
+            level_filter,
+            Config::default(),
+            File::create("ftctui.log").unwrap(),
+        )])
+        .unwrap();
+    }
+
+    if args.experimental_configuration_things {
         CombinedLogger::init(vec![
             WriteLogger::new(
-                level_filter,
+                LevelFilter::Trace,
                 Config::default(),
                 File::create("ftctui.log").unwrap(),
             ),
@@ -81,10 +96,9 @@ async fn main() -> color_eyre::Result<()> {
             ),
         ])
         .unwrap();
-    }
 
-    let a = try_parse_xml_document(
-        r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+        let a = try_parse_xml_document(
+            r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <Robot type="FirstInspires-FTC">
     <LynxUsbDevice name="Control Hub Portal" serialNumber="(embedded)" parentModuleAddress="173">
         <LynxModule name="Control Hub" port="173">
@@ -96,18 +110,19 @@ async fn main() -> color_eyre::Result<()> {
         </LynxModule>
     </LynxUsbDevice>
 </Robot>"#
-            .to_string(),
-        Vec::new(),
-    ).unwrap();
+                .to_string(),
+            Vec::new(),
+        )
+        .unwrap();
 
-    log::info!("{:?}", a);
+        log::info!("{:?}", a);
 
-	 let b = write_xml_document(&a);
+        let b = write_xml_document(&a);
 
-    log::info!("{}", b);
+        log::info!("{}", b);
 
-    std::process::exit(0);
-    return Ok(());
+        return Ok(());
+    }
 
     cfg_if::cfg_if! {
        if #[cfg(target_os = "linux")] {
