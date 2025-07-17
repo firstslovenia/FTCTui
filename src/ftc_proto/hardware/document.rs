@@ -8,12 +8,11 @@ use crate::ftc_proto::hardware::{
 };
 
 use xml::{
-    EmitterConfig,
     attribute::Attribute,
     common::XmlVersion,
     namespace::Namespace,
     reader::{EventReader, XmlEvent},
-    writer,
+    writer, EmitterConfig,
 };
 
 /// Tries to parse an xml robot configuration
@@ -58,7 +57,7 @@ pub fn try_parse_xml_document(
 
                 let mut parent_module_address = u32::MAX;
                 let mut port = None;
-                let mut bus = u32::MAX;
+                let mut bus = None;
                 let mut name = tag_name.to_string();
                 let mut serial_number = None;
 
@@ -68,7 +67,7 @@ pub fn try_parse_xml_document(
                             parent_module_address = attribute.value.parse().unwrap()
                         }
                         "port" => port = Some(attribute.value.parse().unwrap()),
-                        "bus" => bus = attribute.value.parse().unwrap(),
+                        "bus" => bus = Some(attribute.value.parse().unwrap()),
                         "name" => {
                             name = attribute.value;
                         }
@@ -93,6 +92,7 @@ pub fn try_parse_xml_document(
                                     name,
                                     device_type: DeviceFlavor::BuiltIn,
                                     port,
+                                    bus,
                                 },
                             },
                         });
@@ -111,6 +111,7 @@ pub fn try_parse_xml_document(
                                         name,
                                         device_type: DeviceFlavor::BuiltIn,
                                         port,
+                                        bus,
                                     },
                                 },
                                 servos: Vec::new(),
@@ -133,6 +134,7 @@ pub fn try_parse_xml_document(
                                     device_type: device_type.flavor,
                                     name: name.clone(),
                                     port,
+                                    bus,
                                 };
 
                                 match device_type.flavor {
@@ -342,8 +344,19 @@ pub fn write_xml_document(robot: &Robot) -> String {
                     });
                 }
 
+                let bus_string;
+
+                if let Some(bus) = device.bus {
+                    bus_string = bus.to_string();
+
+                    attributes.push(Attribute {
+                        name: "bus".into(),
+                        value: bus_string.as_str(),
+                    });
+                }
+
                 if let Err(e) = writer.write(writer::XmlEvent::StartElement {
-                    name: device.name.as_str().into(),
+                    name: device.xml_tag_name.as_str().into(),
                     attributes: attributes.into(),
                     namespace: std::borrow::Cow::Owned(Namespace::empty()),
                 }) {
@@ -351,7 +364,7 @@ pub fn write_xml_document(robot: &Robot) -> String {
                 }
 
                 if let Err(e) = writer.write(writer::XmlEvent::EndElement {
-                    name: Some(device.name.as_str().into()),
+                    name: Some(device.xml_tag_name.as_str().into()),
                 }) {
                     log::error!("Write error: {e}")
                 }

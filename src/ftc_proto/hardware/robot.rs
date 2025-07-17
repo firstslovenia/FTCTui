@@ -44,10 +44,11 @@ pub struct Robot {
 /// Generic data for almost every device in our configuration
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigurationDevice {
-	 /// Always set when deserializing, needs to be set when serializing
-	 pub xml_tag_name: String,
+    /// Always set when deserializing, needs to be set when serializing
+    pub xml_tag_name: String,
     pub name: String,
     pub port: Option<u32>,
+    pub bus: Option<u32>,
     pub device_type: DeviceFlavor,
 }
 
