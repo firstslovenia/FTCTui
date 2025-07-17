@@ -4,7 +4,10 @@ use app::App;
 use clap::Parser;
 use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger};
 
-use crate::ftc_proto::hardware::document::{try_parse_xml_document, write_xml_document};
+use crate::ftc_proto::hardware::{
+    device::HardwareDeviceType,
+    document::{try_parse_xml_document, write_xml_document},
+};
 
 pub mod app;
 pub mod command;
@@ -47,13 +50,19 @@ pub struct Args {
     /// You should likely only use this if the tty check doesn't work
     #[arg(long, default_value_t = false)]
     skip_tty_check: bool,
+
+    /// If provided, runs the experimental configuration test (instead of the actual program)
+    #[arg(long, default_value_t = false)]
+    experimental_configuration_things: bool,
 }
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let args = Args::parse();
 
-    if let Some(level) = args.log_level.clone() {
+    if let Some(level) = args.log_level.clone()
+        && !args.experimental_configuration_things
+    {
         let level_filter = match level.to_lowercase().as_str() {
             "error" => LevelFilter::Error,
             "warn" => LevelFilter::Warn,
@@ -73,6 +82,55 @@ async fn main() -> color_eyre::Result<()> {
             File::create("ftctui.log").unwrap(),
         )])
         .unwrap();
+    }
+
+    if args.experimental_configuration_things {
+        CombinedLogger::init(vec![
+            WriteLogger::new(
+                LevelFilter::Trace,
+                Config::default(),
+                File::create("ftctui.log").unwrap(),
+            ),
+            TermLogger::new(
+                LevelFilter::Trace,
+                Config::default(),
+                TerminalMode::Mixed,
+                simplelog::ColorChoice::Auto,
+            ),
+        ])
+        .unwrap();
+
+        let robot_config = crate::robot::Robot::new_fake().configuration_types.unwrap();
+
+        let original = r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<Robot>
+    <LynxUsbDevice name="Control Hub Portal" serialNumber="(embedded)" parentModuleAddress="173">
+        <LynxModule name="Control Hub" port="173">
+            <RevRoboticsUltraplanetaryHDHexMotor name="leftForward" port="0" />
+            <RevRoboticsUltraplanetaryHDHexMotor name="frontSideways" port="1" />
+            <RevRoboticsUltraplanetaryHDHexMotor name="rightForward" port="2" />
+            <RevRoboticsUltraplanetaryHDHexMotor name="backSideways" port="3" />
+            <ControlHubImuBHI260AP name="imu" port="0" bus="0" />
+            <ModernRoboticsI2cCompassSensor name="Compass" port="1" bus="0" />
+        </LynxModule>
+        <LynxModule name="Expansion Hub 2" port="2">
+            <RevRoboticsUltraplanetaryHDHexMotor name="lifter1" port="0" />
+            <RevRoboticsUltraplanetaryHDHexMotor name="lifter2" port="1" />
+        </LynxModule>
+    </LynxUsbDevice>
+</Robot>
+"#;
+
+        let a = try_parse_xml_document(original.to_string(), &robot_config).unwrap();
+
+        log::info!("{}", original);
+
+        log::info!("{:?}", a);
+
+        let b = write_xml_document(&a);
+
+        log::info!("{}", b);
+        return Ok(());
     }
 
     cfg_if::cfg_if! {

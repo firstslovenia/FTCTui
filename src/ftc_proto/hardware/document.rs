@@ -1,6 +1,6 @@
 //! Parsing of the XML document
 
-use std::{io::Cursor, os::linux::fs::MetadataExt};
+use std::io::Cursor;
 
 use crate::ftc_proto::hardware::{
     device::{DeviceFlavor, HardwareDeviceType},
@@ -8,7 +8,7 @@ use crate::ftc_proto::hardware::{
 };
 
 use xml::{
-    EmitterConfig, Encoding,
+    EmitterConfig,
     attribute::Attribute,
     common::XmlVersion,
     namespace::Namespace,
@@ -30,6 +30,8 @@ pub fn try_parse_xml_document(
     };
 
     log::debug!("Starting XML parse..");
+
+    let mut num_lynx_modules = 0;
 
     let parser = EventReader::new(cursor);
     let mut depth = 0;
@@ -82,11 +84,12 @@ pub fn try_parse_xml_document(
                     "LynxUsbDevice" => {
                         robot.lynx_usb_device = Some(LynxUSBDevice {
                             servo_hub: None,
-                            lynx_module: None,
+                            lynx_modules: Vec::new(),
                             parent_module_address,
                             controller_meta: ConfigurationController {
                                 serial_number,
                                 device_meta: ConfigurationDevice {
+                                    xml_tag_name: tag_name.to_string(),
                                     name,
                                     device_type: DeviceFlavor::BuiltIn,
                                     port,
@@ -95,22 +98,30 @@ pub fn try_parse_xml_document(
                         });
                     }
                     "LynxModule" => {
-                        robot.lynx_usb_device.as_mut().unwrap().lynx_module = Some(LynxModule {
-                            controller_meta: ConfigurationController {
-                                serial_number,
-                                device_meta: ConfigurationDevice {
-                                    name,
-                                    device_type: DeviceFlavor::BuiltIn,
-                                    port,
+                        robot
+                            .lynx_usb_device
+                            .as_mut()
+                            .unwrap()
+                            .lynx_modules
+                            .push(LynxModule {
+                                controller_meta: ConfigurationController {
+                                    serial_number,
+                                    device_meta: ConfigurationDevice {
+                                        xml_tag_name: tag_name.to_string(),
+                                        name,
+                                        device_type: DeviceFlavor::BuiltIn,
+                                        port,
+                                    },
                                 },
-                            },
-                            servos: Vec::new(),
-                            motors: Vec::new(),
-                            i2c_devices: Vec::new(),
-                            pwm_outputs: Vec::new(),
-                            analog_inputs: Vec::new(),
-                            digital_devices: Vec::new(),
-                        });
+                                servos: Vec::new(),
+                                motors: Vec::new(),
+                                i2c_devices: Vec::new(),
+                                pwm_outputs: Vec::new(),
+                                analog_inputs: Vec::new(),
+                                digital_devices: Vec::new(),
+                            });
+
+                        num_lynx_modules += 1;
                     }
                     _ => {
                         let mut handled = false;
@@ -118,6 +129,7 @@ pub fn try_parse_xml_document(
                         for device_type in device_types {
                             if tag_name.to_string() == device_type.xml_tag {
                                 let device = ConfigurationDevice {
+                                    xml_tag_name: tag_name.to_string(),
                                     device_type: device_type.flavor,
                                     name: name.clone(),
                                     port,
@@ -125,58 +137,33 @@ pub fn try_parse_xml_document(
 
                                 match device_type.flavor {
                                     DeviceFlavor::Motor => {
-                                        robot
-                                            .lynx_usb_device
-                                            .as_mut()
-                                            .unwrap()
-                                            .lynx_module
-                                            .as_mut()
-                                            .unwrap()
+                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
+                                            [num_lynx_modules - 1]
                                             .motors
                                             .push(device);
                                     }
                                     DeviceFlavor::Servo => {
-                                        robot
-                                            .lynx_usb_device
-                                            .as_mut()
-                                            .unwrap()
-                                            .lynx_module
-                                            .as_mut()
-                                            .unwrap()
+                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
+                                            [num_lynx_modules - 1]
                                             .servos
                                             .push(device);
                                     }
                                     DeviceFlavor::I2C => {
-                                        robot
-                                            .lynx_usb_device
-                                            .as_mut()
-                                            .unwrap()
-                                            .lynx_module
-                                            .as_mut()
-                                            .unwrap()
+                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
+                                            [num_lynx_modules - 1]
                                             .i2c_devices
                                             .push(device);
                                     }
                                     DeviceFlavor::AnalogSensor => {
-                                        robot
-                                            .lynx_usb_device
-                                            .as_mut()
-                                            .unwrap()
-                                            .lynx_module
-                                            .as_mut()
-                                            .unwrap()
+                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
+                                            [num_lynx_modules - 1]
                                             .analog_inputs
                                             .push(device);
                                     }
                                     // ?? maybe
                                     DeviceFlavor::AnalogOutput => {
-                                        robot
-                                            .lynx_usb_device
-                                            .as_mut()
-                                            .unwrap()
-                                            .lynx_module
-                                            .as_mut()
-                                            .unwrap()
+                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
+                                            [num_lynx_modules - 1]
                                             .pwm_outputs
                                             .push(device);
                                     }
@@ -273,15 +260,6 @@ pub fn write_xml_document(robot: &Robot) -> String {
 
         let lynx_parent_module_address = lynx_usb_device.parent_module_address.to_string();
 
-        let lynx_module = lynx_usb_device.lynx_module.as_ref().unwrap();
-
-        let control_hub_port = lynx_module
-            .controller_meta
-            .device_meta
-            .port
-            .map(|x| x.to_string())
-            .unwrap_or(lynx_parent_module_address.clone());
-
         events.push(writer::XmlEvent::StartElement {
             name: "LynxUsbDevice".into(),
             attributes: std::borrow::Cow::Owned(vec![
@@ -301,63 +279,86 @@ pub fn write_xml_document(robot: &Robot) -> String {
             namespace: std::borrow::Cow::Owned(Namespace::empty()),
         });
 
-        events.push(writer::XmlEvent::StartElement {
-            name: "LynxModule".into(),
-            attributes: std::borrow::Cow::Owned(vec![
-                Attribute {
-                    name: "name".into(),
-                    value: "Control Hub",
-                },
-                Attribute {
-                    name: "port".into(),
-                    value: control_hub_port.as_str(),
-                },
-            ]),
-            namespace: std::borrow::Cow::Owned(Namespace::empty()),
-        });
-
         for event in events {
             if let Err(e) = writer.write(event) {
                 log::error!("Write error: {e}")
             }
         }
 
-        let mut lynx_devices = Vec::new();
+        let mut lynx_module_ports = Vec::new();
 
-        lynx_devices.append(&mut lynx_module.motors.clone());
-        lynx_devices.append(&mut lynx_module.servos.clone());
-        lynx_devices.append(&mut lynx_module.i2c_devices.clone());
-        lynx_devices.append(&mut lynx_module.digital_devices.clone());
-        lynx_devices.append(&mut lynx_module.pwm_outputs.clone());
-        lynx_devices.append(&mut lynx_module.analog_inputs.clone());
+        for module in lynx_usb_device.lynx_modules.iter() {
+            lynx_module_ports.push(
+                module
+                    .controller_meta
+                    .device_meta
+                    .port
+                    .map(|x| x.to_string())
+                    .unwrap_or(lynx_parent_module_address.clone()),
+            );
+        }
 
-        for device in &lynx_devices {
-            let mut attributes = vec![Attribute {
-                name: "name".into(),
-                value: device.name.as_str(),
-            }];
-
-            let port_string;
-
-            if let Some(port) = device.port {
-                port_string = port.to_string();
-
-                attributes.push(Attribute {
-                    name: "port".into(),
-                    value: port_string.as_str(),
-                });
-            }
-
+        for (i, module) in lynx_usb_device.lynx_modules.iter().enumerate() {
             if let Err(e) = writer.write(writer::XmlEvent::StartElement {
-                name: device.name.as_str().into(),
-                attributes: attributes.into(),
+                name: "LynxModule".into(),
+                attributes: std::borrow::Cow::Owned(vec![
+                    Attribute {
+                        name: "name".into(),
+                        value: module.controller_meta.device_meta.name.as_str(),
+                    },
+                    Attribute {
+                        name: "port".into(),
+                        value: lynx_module_ports[i].as_str(),
+                    },
+                ]),
                 namespace: std::borrow::Cow::Owned(Namespace::empty()),
             }) {
                 log::error!("Write error: {e}")
             }
 
+            let mut lynx_devices = Vec::new();
+
+            lynx_devices.append(&mut module.motors.clone());
+            lynx_devices.append(&mut module.servos.clone());
+            lynx_devices.append(&mut module.i2c_devices.clone());
+            lynx_devices.append(&mut module.digital_devices.clone());
+            lynx_devices.append(&mut module.pwm_outputs.clone());
+            lynx_devices.append(&mut module.analog_inputs.clone());
+
+            for device in &lynx_devices {
+                let mut attributes = vec![Attribute {
+                    name: "name".into(),
+                    value: device.name.as_str(),
+                }];
+
+                let port_string;
+
+                if let Some(port) = device.port {
+                    port_string = port.to_string();
+
+                    attributes.push(Attribute {
+                        name: "port".into(),
+                        value: port_string.as_str(),
+                    });
+                }
+
+                if let Err(e) = writer.write(writer::XmlEvent::StartElement {
+                    name: device.name.as_str().into(),
+                    attributes: attributes.into(),
+                    namespace: std::borrow::Cow::Owned(Namespace::empty()),
+                }) {
+                    log::error!("Write error: {e}")
+                }
+
+                if let Err(e) = writer.write(writer::XmlEvent::EndElement {
+                    name: Some(device.name.as_str().into()),
+                }) {
+                    log::error!("Write error: {e}")
+                }
+            }
+
             if let Err(e) = writer.write(writer::XmlEvent::EndElement {
-                name: Some(device.name.as_str().into()),
+                name: Some("LynxModule".into()),
             }) {
                 log::error!("Write error: {e}")
             }
@@ -365,9 +366,6 @@ pub fn write_xml_document(robot: &Robot) -> String {
 
         events = Vec::new();
 
-        events.push(writer::XmlEvent::EndElement {
-            name: Some("LynxModule".into()),
-        });
         events.push(writer::XmlEvent::EndElement {
             name: Some("LynxUsbDevice".into()),
         });

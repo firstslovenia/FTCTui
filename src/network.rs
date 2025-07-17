@@ -832,6 +832,7 @@ impl NetworkHandler {
             }
             REQUEST_CONFIGURATION_RESPONSE => {
                 log::info!("Received robot detailed configuration");
+                log::trace!("{}", packet.data);
 
                 let read_lock = self.robot.read().await;
 

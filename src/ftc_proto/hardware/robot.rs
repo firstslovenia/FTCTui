@@ -44,6 +44,8 @@ pub struct Robot {
 /// Generic data for almost every device in our configuration
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigurationDevice {
+	 /// Always set when deserializing, needs to be set when serializing
+	 pub xml_tag_name: String,
     pub name: String,
     pub port: Option<u32>,
     pub device_type: DeviceFlavor,
@@ -61,7 +63,7 @@ pub struct ConfigurationController {
 pub struct LynxUSBDevice {
     pub controller_meta: ConfigurationController,
     pub parent_module_address: u32,
-    pub lynx_module: Option<LynxModule>,
+    pub lynx_modules: Vec<LynxModule>,
     pub servo_hub: Option<ServoHub>,
 }
 
