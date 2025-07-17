@@ -10,13 +10,18 @@ use crate::{
     app::{get_timestamp_millis, get_timestamp_nanos},
     ftc_proto::{
         gamepad_packet::GamepadPacketData,
+        hardware::{
+            device::HardwareDeviceType,
+            document::{try_parse_xml_document, write_xml_document},
+        },
         heartbeat_packet::HeartbeatPacketData,
         packet::{Packet, PacketType},
         robot_command::{
-            CommandPacketData, INIT_OPMODE, NOTIFY_ACTIVE_CONFIGURATION, NOTIFY_INIT_OPMODE,
-            NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES, NOTIFY_RUN_OPMODE, OPMODE_STOP, OpModeData,
-            REQUEST_ACTIVE_CONFIGURATION, REQUEST_OP_MODES, RobotConfigurationFile,
-            SHOW_STACKTRACE,
+            CommandPacketData, INIT_OPMODE, NOTIFY_ACTIVE_CONFIGURATION,
+            NOTIFY_CONFIGURATION_TYPES, NOTIFY_INIT_OPMODE, NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES,
+            NOTIFY_RUN_OPMODE, OPMODE_STOP, OpModeData, REQUEST_ACTIVE_CONFIGURATION,
+            REQUEST_CONFIGURATION, REQUEST_CONFIGURATION_RESPONSE, REQUEST_OP_MODES,
+            RobotConfigurationFile, SHOW_STACKTRACE,
         },
         telemetry_packet::{
             ROBOT_BATTERY_LEVEL_KEY, ROBOT_CONTROLLER_BATTERY_STATUS_KEY, SYSTEM_ERROR_KEY,
@@ -769,6 +774,29 @@ impl NetworkHandler {
                     log::warn!("Failed to parse opmode list: {} ({})", e, packet.data);
                 }
             },
+            NOTIFY_CONFIGURATION_TYPES => {
+                match serde_json::from_str::<Vec<HardwareDeviceType>>(&packet.data) {
+                    Ok(types) => {
+                        log::info!(
+                            "Received robot configuration device types ({})",
+                            types.len()
+                        );
+
+                        let mut write_lock = self.robot.write().await;
+
+                        write_lock.configuration_types = Some(types);
+
+                        drop(write_lock);
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "Failed to parse configuration device types: {} ({})",
+                            e,
+                            packet.data
+                        );
+                    }
+                }
+            }
             NOTIFY_ACTIVE_CONFIGURATION => {
                 match serde_json::from_str::<RobotConfigurationFile>(&packet.data) {
                     Ok(config) => {
@@ -777,6 +805,19 @@ impl NetworkHandler {
                         let mut write_lock = self.robot.write().await;
 
                         write_lock.active_configuration = Some(config);
+
+                        // Ask to receive it properly
+                        send_command(
+                            &self.socket,
+                            CommandPacketData {
+                                acknowledged: false,
+                                command: REQUEST_CONFIGURATION.to_string(),
+                                data: packet.data.to_string(),
+                                timestamp: get_timestamp_nanos(),
+                            },
+                            self.shared_data.clone(),
+                        )
+                        .await;
 
                         drop(write_lock);
                     }
@@ -787,6 +828,23 @@ impl NetworkHandler {
                             packet.data
                         );
                     }
+                }
+            }
+            REQUEST_CONFIGURATION_RESPONSE => {
+                log::info!("Received robot detailed configuration");
+
+                let read_lock = self.robot.read().await;
+
+                if let Some(types) = &read_lock.configuration_types {
+                    let robot = try_parse_xml_document(packet.data, types).unwrap();
+
+                    log::info!("Robot config: {:?}", types);
+
+                    let re_written = write_xml_document(&robot);
+
+                    log::info!("Re-written to xml: {}", re_written);
+                } else {
+                    log::warn!("We haven't received our configuration types yet..");
                 }
             }
             NOTIFY_INIT_OPMODE => {

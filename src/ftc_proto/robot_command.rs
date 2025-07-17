@@ -121,10 +121,15 @@ pub const REQUEST_CONFIGURATIONS_RESPONSE: &str = "CMD_REQUEST_CONFIGURATIONS_RE
 /// Client to server
 pub const REQUEST_CONFIGURATION: &str = "CMD_REQUEST_PARTICULAR_CONFIGURATION";
 
-/// Data is json xml configuration
+/// Data is xml configuration
 ///
 /// Server to client
 pub const REQUEST_CONFIGURATION_RESPONSE: &str = "CMD_REQUEST_PARTICULAR_CONFIGURATION_RESP";
+
+/// Data is json vec ConfigurationType
+///
+/// Client to server
+pub const NOTIFY_CONFIGURATION_TYPES: &str = "CMD_NOTIFY_USER_DEVICE_LIST";
 
 /// Data is a string name of an opmode
 ///

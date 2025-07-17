@@ -17,7 +17,10 @@ use xml::{
 };
 
 /// Tries to parse an xml robot configuration
-pub fn try_parse_xml_document(xml: String, device_types: Vec<HardwareDeviceType>) -> Option<Robot> {
+pub fn try_parse_xml_document(
+    xml: String,
+    device_types: &Vec<HardwareDeviceType>,
+) -> Option<Robot> {
     let cursor = Cursor::new(xml);
 
     let mut robot = Robot {
@@ -112,7 +115,7 @@ pub fn try_parse_xml_document(xml: String, device_types: Vec<HardwareDeviceType>
                     _ => {
                         let mut handled = false;
 
-                        for device_type in &device_types {
+                        for device_type in device_types {
                             if tag_name.to_string() == device_type.xml_tag {
                                 let device = ConfigurationDevice {
                                     device_type: device_type.flavor,
@@ -362,9 +365,15 @@ pub fn write_xml_document(robot: &Robot) -> String {
 
         events = Vec::new();
 
-        events.push(writer::XmlEvent::EndElement { name: Some("LynxModule".into()) });
-        events.push(writer::XmlEvent::EndElement { name: Some("LynxUsbDevice".into()) });
-        events.push(writer::XmlEvent::EndElement { name: Some("Robot".into()) });
+        events.push(writer::XmlEvent::EndElement {
+            name: Some("LynxModule".into()),
+        });
+        events.push(writer::XmlEvent::EndElement {
+            name: Some("LynxUsbDevice".into()),
+        });
+        events.push(writer::XmlEvent::EndElement {
+            name: Some("Robot".into()),
+        });
 
         for event in events {
             if let Err(e) = writer.write(event) {

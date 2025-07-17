@@ -47,19 +47,13 @@ pub struct Args {
     /// You should likely only use this if the tty check doesn't work
     #[arg(long, default_value_t = false)]
     skip_tty_check: bool,
-
-    /// If provided, runs the experimental configuration test (instead of the actual program)
-    #[arg(long, default_value_t = false)]
-    experimental_configuration_things: bool,
 }
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let args = Args::parse();
 
-    if let Some(level) = args.log_level.clone()
-        && !args.experimental_configuration_things
-    {
+    if let Some(level) = args.log_level.clone() {
         let level_filter = match level.to_lowercase().as_str() {
             "error" => LevelFilter::Error,
             "warn" => LevelFilter::Warn,
@@ -79,49 +73,6 @@ async fn main() -> color_eyre::Result<()> {
             File::create("ftctui.log").unwrap(),
         )])
         .unwrap();
-    }
-
-    if args.experimental_configuration_things {
-        CombinedLogger::init(vec![
-            WriteLogger::new(
-                LevelFilter::Trace,
-                Config::default(),
-                File::create("ftctui.log").unwrap(),
-            ),
-            TermLogger::new(
-                LevelFilter::Trace,
-                Config::default(),
-                TerminalMode::Mixed,
-                simplelog::ColorChoice::Auto,
-            ),
-        ])
-        .unwrap();
-
-        let a = try_parse_xml_document(
-            r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
-<Robot type="FirstInspires-FTC">
-    <LynxUsbDevice name="Control Hub Portal" serialNumber="(embedded)" parentModuleAddress="173">
-        <LynxModule name="Control Hub" port="173">
-            <RevRoboticsCoreHexMotor name="backSideways" port="0" />
-            <RevRoboticsCoreHexMotor name="leftForward" port="1" />
-            <RevRoboticsCoreHexMotor name="frontSideways" port="2" />
-            <RevRoboticsCoreHexMotor name="rightForward" port="3" />
-            <ControlHubImuBHI260AP name="imu" port="0" bus="0" />
-        </LynxModule>
-    </LynxUsbDevice>
-</Robot>"#
-                .to_string(),
-            Vec::new(),
-        )
-        .unwrap();
-
-        log::info!("{:?}", a);
-
-        let b = write_xml_document(&a);
-
-        log::info!("{}", b);
-
-        return Ok(());
     }
 
     cfg_if::cfg_if! {

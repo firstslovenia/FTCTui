@@ -1,4 +1,5 @@
 use crate::ftc_proto::{
+    hardware::device::HardwareDeviceType,
     robot_command::{
         DEFAULT_OPMODE_GROUP, OPMODE_STOP, OpModeData, OpModeFlavor, RobotConfigurationFile,
     },
@@ -19,6 +20,9 @@ pub struct Robot {
 
     /// The active configuration, if we've received one
     pub active_configuration: Option<RobotConfigurationFile>,
+
+    /// The valid configuration types, if we're received them from the server
+    pub configuration_types: Option<Vec<HardwareDeviceType>>,
 
     /// The last battery voltage we got
     pub battery_voltage: Option<f32>,
@@ -49,6 +53,7 @@ impl Robot {
             warning_message: None,
             error_message: None,
             telemetry_list: Vec::new(),
+            configuration_types: None,
         }
     }
 
@@ -127,6 +132,8 @@ impl Robot {
                 "claw wanted position : 1".to_string(),
                 "curent position : 1".to_string(),
             ],
+            // TODO maybe
+            configuration_types: None,
         }
     }
 }
