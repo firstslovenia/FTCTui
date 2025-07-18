@@ -9,15 +9,15 @@ use std::{
 use crate::{
     app::{get_timestamp_millis, get_timestamp_nanos},
     ftc_proto::{
-        gamepad_packet::GamepadPacketData,
-        heartbeat_packet::HeartbeatPacketData,
-        packet::{Packet, PacketType},
-        robot_command::{
+        command_packet::{
             CommandPacketData, INIT_OPMODE, NOTIFY_ACTIVE_CONFIGURATION, NOTIFY_INIT_OPMODE,
             NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES, NOTIFY_RUN_OPMODE, OPMODE_STOP, OpModeData,
             REQUEST_ACTIVE_CONFIGURATION, REQUEST_OP_MODES, RobotConfigurationFile,
             SHOW_STACKTRACE,
         },
+        gamepad_packet::GamepadPacketData,
+        heartbeat_packet::HeartbeatPacketData,
+        packet::{Packet, PacketType},
         telemetry_packet::{
             ROBOT_BATTERY_LEVEL_KEY, ROBOT_CONTROLLER_BATTERY_STATUS_KEY, SYSTEM_ERROR_KEY,
             SYSTEM_NONE_KEY, SYSTEM_WARNING_KEY, TelemetryEntry, TelemetryPacketData,

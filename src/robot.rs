@@ -1,5 +1,5 @@
 use crate::ftc_proto::{
-    robot_command::{
+    command_packet::{
         DEFAULT_OPMODE_GROUP, OPMODE_STOP, OpModeData, OpModeFlavor, RobotConfigurationFile,
     },
     time_packet::RobotOpmodeState,
