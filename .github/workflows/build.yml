@@ -46,4 +46,9 @@ jobs:
         run: ./create_appdir.sh
       - name: Create appimage
         run: ARCH=x86_64 ./appimagetool-x86_64.AppImage FTCTui.AppDir
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ftctui_linux_x64_appimage
+          path: ./ftctui-x86_64.AppImage
 
