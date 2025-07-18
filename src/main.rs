@@ -15,6 +15,8 @@ pub mod network;
 pub mod popup;
 pub mod renderers;
 pub mod robot;
+
+#[cfg(target_os = "linux")]
 pub mod tty;
 
 #[derive(Parser, Debug)]
