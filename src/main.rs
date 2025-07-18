@@ -118,15 +118,24 @@ async fn main() -> color_eyre::Result<()> {
 </Robot>
 "#;
 
+        let start = std::time::Instant::now();
         let a = try_parse_xml_document(original.to_string(), &robot_config).unwrap();
+        let parsed = std::time::Instant::now();
+
+        let took_parse = parsed - start;
 
         log::info!("{}", original);
 
         log::info!("{:?}", a);
 
+        let start_2 = std::time::Instant::now();
         let b = write_xml_document(&a).unwrap();
+        let written = std::time::Instant::now();
+
+        let took_write = written - start_2;
 
         log::info!("{}", b);
+        log::info!("Parsing took {:?}, writing {:?}", took_parse, took_write);
         return Ok(());
     }
 

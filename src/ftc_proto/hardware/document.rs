@@ -103,7 +103,7 @@ pub fn try_parse_xml_document(
                                 }
                                 None => {
                                     log::error!(
-                                        "Failed to parse LynxUSBDevice from XML! Bailing out.."
+                                        "Failed to parse LynxModule from XML! Bailing out.."
                                     );
                                     return None;
                                 }
