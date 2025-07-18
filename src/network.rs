@@ -16,7 +16,7 @@ use crate::{
         },
         heartbeat_packet::HeartbeatPacketData,
         packet::{Packet, PacketType},
-        robot_command::{
+        command_packet::{
             CommandPacketData, INIT_OPMODE, NOTIFY_ACTIVE_CONFIGURATION,
             NOTIFY_CONFIGURATION_TYPES, NOTIFY_INIT_OPMODE, NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES,
             NOTIFY_RUN_OPMODE, OPMODE_STOP, OpModeData, REQUEST_ACTIVE_CONFIGURATION,

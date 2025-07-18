@@ -4,7 +4,7 @@ pub mod gamepad_packet;
 pub mod hardware;
 pub mod heartbeat_packet;
 pub mod packet;
-pub mod robot_command;
+pub mod command_packet;
 pub mod telemetry_packet;
 pub mod time_packet;
 pub mod traits;
@@ -15,7 +15,7 @@ pub mod test_deserializer {
         gamepad_packet::GamepadPacketData,
         heartbeat_packet::HeartbeatPacketData,
         packet::{Packet, PacketType},
-        robot_command::CommandPacketData,
+        command_packet::CommandPacketData,
         telemetry_packet::TelemetryPacketData,
         time_packet::TimePacketData,
         traits::Readable,

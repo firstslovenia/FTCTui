@@ -8,7 +8,7 @@ use crate::{
     },
     ftc_proto::{
         gamepad_packet::{ButtonFlags, GamepadPacketData},
-        robot_command::OPMODE_STOP,
+        command_packet::OPMODE_STOP,
         time_packet::RobotOpmodeState,
     },
 };

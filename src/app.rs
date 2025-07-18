@@ -15,7 +15,7 @@ use async_lock::{Mutex, RwLock};
 
 use crate::{
     Args,
-    ftc_proto::robot_command::{
+    ftc_proto::command_packet::{
         CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
     },
     gamepad_map::{self, AsyncGilrs, REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX},
