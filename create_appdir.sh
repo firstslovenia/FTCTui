@@ -4,8 +4,9 @@ mkdir FTCTui.AppDir
 cd FTCTui.AppDir
 
 cp ../target/release/ftctui ./AppRun
-cp ../assets/app_icon.png ./icon
+
 cp ../assets/app_icon.png ./icon.png
+
 mkdir Help
 
 mkdir -p usr/share/applications
@@ -18,14 +19,9 @@ Type=Application
 Name=ftctui
 Exec=AppRun
 Icon=icon
-Terminal=true
 
-Comment=
-
-Categories=Development;Education;
-Keywords=ftctui;ftc;fgc;first;
-
-NoDisplay=false" > usr/share/applications/ftctui.desktop
+Categories=Education;
+Keywords=ftctui;ftc;fgc;first;" > usr/share/applications/ftctui.desktop
 
 ln -s usr/share/applications/ftctui.desktop ftctui.desktop
 
