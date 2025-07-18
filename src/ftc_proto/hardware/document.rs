@@ -3,16 +3,18 @@
 use std::io::Cursor;
 
 use crate::ftc_proto::hardware::{
+    FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag,
     device::{DeviceFlavor, HardwareDeviceType},
-    robot::{ConfigurationController, ConfigurationDevice, LynxModule, LynxUSBDevice, Robot},
+    lynx::{LynxModule, LynxUSBDevice, ServoHub},
+    robot::{ConfigurationDevice, Robot},
 };
 
 use xml::{
-    attribute::Attribute,
+    EmitterConfig,
     common::XmlVersion,
     namespace::Namespace,
     reader::{EventReader, XmlEvent},
-    writer, EmitterConfig,
+    writer,
 };
 
 /// Tries to parse an xml robot configuration
@@ -26,199 +28,225 @@ pub fn try_parse_xml_document(
         webcam: None,
         lynx_usb_device: None,
         ethernet_over_usb_device: None,
+        r#type: None,
     };
 
     log::debug!("Starting XML parse..");
 
     let mut num_lynx_modules = 0;
+    let mut num_servo_hubs = 0;
+
+    let mut in_lynx_module_i: Option<usize> = None;
+    let mut in_servo_hub_i: Option<usize> = None;
 
     let parser = EventReader::new(cursor);
     let mut depth = 0;
     for e in parser {
         match e {
-            Ok(XmlEvent::StartElement {
-                name: tag_name,
-                attributes,
-                namespace: _namespace,
-            }) => {
-                log::trace!("{:spaces$}+{}", "", tag_name, spaces = depth * 2);
+            Ok(event) => {
+                match event.clone() {
+                    XmlEvent::StartElement {
+                        name: tag_name,
+                        attributes,
+                        namespace: _namespace,
+                    } => {
+                        log::trace!("{:spaces$}+{}", "", tag_name, spaces = depth * 2);
 
-                for attr in &attributes {
-                    log::trace!(
-                        "{:spaces$}{} - {}",
-                        "",
-                        attr.name,
-                        attr.value,
-                        spaces = depth * 2,
-                    );
-                }
-
-                depth += 1;
-
-                let mut parent_module_address = u32::MAX;
-                let mut port = None;
-                let mut bus = None;
-                let mut name = tag_name.to_string();
-                let mut serial_number = None;
-
-                for attribute in attributes {
-                    match attribute.name.to_string().as_str() {
-                        "parentModuleAddress" => {
-                            parent_module_address = attribute.value.parse().unwrap()
+                        for attr in &attributes {
+                            log::trace!(
+                                "{:spaces$}{} - {}",
+                                "",
+                                attr.name,
+                                attr.value,
+                                spaces = depth * 2,
+                            );
                         }
-                        "port" => port = Some(attribute.value.parse().unwrap()),
-                        "bus" => bus = Some(attribute.value.parse().unwrap()),
-                        "name" => {
-                            name = attribute.value;
-                        }
-                        "serialNumber" => {
-                            serial_number = Some(attribute.value);
-                        }
-                        _ => {}
-                    }
-                }
 
-                match tag_name.to_string().as_str() {
-                    "Robot" => {}
-                    "LynxUsbDevice" => {
-                        robot.lynx_usb_device = Some(LynxUSBDevice {
-                            servo_hub: None,
-                            lynx_modules: Vec::new(),
-                            parent_module_address,
-                            controller_meta: ConfigurationController {
-                                serial_number,
-                                device_meta: ConfigurationDevice {
-                                    xml_tag_name: tag_name.to_string(),
-                                    name,
-                                    device_type: DeviceFlavor::BuiltIn,
-                                    port,
-                                    bus,
-                                },
+                        depth += 1;
+
+                        match tag_name.to_string().as_str() {
+                            "Robot" => match Robot::from_xml_tag(event) {
+                                Some(r) => robot = r,
+                                None => {
+                                    log::error!("Failed to parse Robot from XML! Bailing out..");
+                                    return None;
+                                }
                             },
-                        });
-                    }
-                    "LynxModule" => {
-                        robot
-                            .lynx_usb_device
-                            .as_mut()
-                            .unwrap()
-                            .lynx_modules
-                            .push(LynxModule {
-                                controller_meta: ConfigurationController {
-                                    serial_number,
-                                    device_meta: ConfigurationDevice {
-                                        xml_tag_name: tag_name.to_string(),
-                                        name,
-                                        device_type: DeviceFlavor::BuiltIn,
-                                        port,
-                                        bus,
-                                    },
-                                },
-                                servos: Vec::new(),
-                                motors: Vec::new(),
-                                i2c_devices: Vec::new(),
-                                pwm_outputs: Vec::new(),
-                                analog_inputs: Vec::new(),
-                                digital_devices: Vec::new(),
-                            });
-
-                        num_lynx_modules += 1;
-                    }
-                    _ => {
-                        let mut handled = false;
-
-                        for device_type in device_types {
-                            if tag_name.to_string() == device_type.xml_tag {
-                                let device = ConfigurationDevice {
-                                    xml_tag_name: tag_name.to_string(),
-                                    device_type: device_type.flavor,
-                                    name: name.clone(),
-                                    port,
-                                    bus,
-                                };
-
-                                match device_type.flavor {
-                                    DeviceFlavor::Motor => {
-                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
-                                            [num_lynx_modules - 1]
-                                            .motors
-                                            .push(device);
-                                    }
-                                    DeviceFlavor::Servo => {
-                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
-                                            [num_lynx_modules - 1]
-                                            .servos
-                                            .push(device);
-                                    }
-                                    DeviceFlavor::I2C => {
-                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
-                                            [num_lynx_modules - 1]
-                                            .i2c_devices
-                                            .push(device);
-                                    }
-                                    DeviceFlavor::AnalogSensor => {
-                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
-                                            [num_lynx_modules - 1]
-                                            .analog_inputs
-                                            .push(device);
-                                    }
-                                    // ?? maybe
-                                    DeviceFlavor::AnalogOutput => {
-                                        robot.lynx_usb_device.as_mut().unwrap().lynx_modules
-                                            [num_lynx_modules - 1]
-                                            .pwm_outputs
-                                            .push(device);
-                                    }
-                                    _ => {
-                                        println!(
-                                            "Unhandled flavor {:?} - (name {})",
-                                            device_type.flavor, device_type.xml_tag
-                                        );
-                                    }
+                            "LynxUsbDevice" => match LynxUSBDevice::from_xml_tag(event) {
+                                Some(l) => robot.lynx_usb_device = Some(l),
+                                None => {
+                                    log::error!(
+                                        "Failed to parse LynxUSBDevice from XML! Bailing out.."
+                                    );
+                                    return None;
+                                }
+                            },
+                            "LynxModule" => match LynxModule::from_xml_tag(event) {
+                                Some(l) => {
+                                    robot.lynx_usb_device.as_mut().unwrap().lynx_modules.push(l);
+                                    num_lynx_modules += 1;
+                                    in_lynx_module_i = Some(num_lynx_modules - 1);
+                                }
+                                None => {
+                                    log::error!(
+                                        "Failed to parse LynxUSBDevice from XML! Bailing out.."
+                                    );
+                                    return None;
+                                }
+                            },
+                            "ServoHub" => match ServoHub::from_xml_tag(event) {
+                                Some(h) => {
+                                    robot.lynx_usb_device.as_mut().unwrap().servo_hubs.push(h);
+                                    num_servo_hubs += 1;
+                                    in_servo_hub_i = Some(num_servo_hubs - 1);
+                                }
+                                None => {
+                                    log::error!("Failed to parse ServoHub from XML! Bailing out..");
+                                    return None;
+                                }
+                            },
+                            _ => {
+                                if in_servo_hub_i.is_none() && in_lynx_module_i.is_none() {
+                                    log::warn!("Unhandled XML tag: {tag_name}");
+                                    continue;
                                 }
 
-                                handled = true;
-                                break;
+                                if let Some(servo_hub_index) = in_servo_hub_i {
+                                    match ConfigurationDevice::from_xml_tag(event, device_types) {
+                                        Some(device) => match device.device_type {
+                                            DeviceFlavor::Servo => {
+                                                robot.lynx_usb_device.as_mut().unwrap().servo_hubs
+                                                    [servo_hub_index]
+                                                    .servos
+                                                    .push(device);
+                                            }
+                                            _ => {
+                                                log::warn!(
+                                                    "Non-servo ({}, which is {:?}) in ServoHub. Ignoring..",
+                                                    device.xml_tag_name,
+                                                    device.device_type
+                                                );
+                                            }
+                                        },
+                                        None => {
+                                            log::error!(
+                                                "Failed to parse tag {} as Configuration Device (in ServoHub)",
+                                                tag_name.to_string()
+                                            );
+                                        }
+                                    }
+                                } else if let Some(lynx_module_index) = in_lynx_module_i {
+                                    match ConfigurationDevice::from_xml_tag(event, device_types) {
+                                        Some(device) => {
+                                            match device.device_type {
+                                                DeviceFlavor::Motor => {
+                                                    robot
+                                                        .lynx_usb_device
+                                                        .as_mut()
+                                                        .unwrap()
+                                                        .lynx_modules[lynx_module_index]
+                                                        .motors
+                                                        .push(device);
+                                                }
+                                                DeviceFlavor::Servo => {
+                                                    robot
+                                                        .lynx_usb_device
+                                                        .as_mut()
+                                                        .unwrap()
+                                                        .lynx_modules[lynx_module_index]
+                                                        .servos
+                                                        .push(device);
+                                                }
+                                                DeviceFlavor::I2C => {
+                                                    robot
+                                                        .lynx_usb_device
+                                                        .as_mut()
+                                                        .unwrap()
+                                                        .lynx_modules[lynx_module_index]
+                                                        .i2c_devices
+                                                        .push(device);
+                                                }
+                                                DeviceFlavor::AnalogSensor => {
+                                                    robot
+                                                        .lynx_usb_device
+                                                        .as_mut()
+                                                        .unwrap()
+                                                        .lynx_modules[lynx_module_index]
+                                                        .analog_inputs
+                                                        .push(device);
+                                                }
+                                                // ?? maybe
+                                                DeviceFlavor::AnalogOutput => {
+                                                    robot
+                                                        .lynx_usb_device
+                                                        .as_mut()
+                                                        .unwrap()
+                                                        .lynx_modules[lynx_module_index]
+                                                        .pwm_outputs
+                                                        .push(device);
+                                                }
+                                                _ => {
+                                                    println!(
+                                                        "Unhandled flavor {:?} - (tag {})",
+                                                        device.device_type, device.xml_tag_name
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            log::error!(
+                                                "Failed to parse tag {} as Configuration Device (in LynxModule)",
+                                                tag_name.to_string()
+                                            );
+                                        }
+                                    }
+                                }
                             }
                         }
+                    }
+                    XmlEvent::EndElement { name } => {
+                        depth -= 1;
+                        log::trace!("{:spaces$}-{name}", "", spaces = depth * 2);
 
-                        if !handled {
-                            log::warn!("Unhandled tag {}", tag_name);
+                        match name.to_string().as_str() {
+                            "LynxModule" => {
+                                in_lynx_module_i = None;
+                            }
+                            "ServoHub" => {
+                                in_servo_hub_i = None;
+                            }
+                            _ => {}
                         }
                     }
+                    XmlEvent::StartDocument {
+                        version,
+                        encoding,
+                        standalone,
+                    } => {
+                        log::trace!(
+                            "Start document: v{}, encoding {}, standalone: {:?}",
+                            version,
+                            encoding,
+                            standalone
+                        );
+                    }
+                    XmlEvent::EndDocument => {
+                        log::trace!("End document");
+                    }
+                    XmlEvent::CData(something) => {
+                        log::trace!("CData: {}", something);
+                    }
+                    XmlEvent::Comment(comment) => {
+                        log::trace!("Comment: {}", comment);
+                    }
+                    // There's more: https://docs.rs/xml-rs/latest/xml/reader/enum.XmlEvent.html
+                    _ => {}
                 }
-            }
-            Ok(XmlEvent::EndElement { name }) => {
-                depth -= 1;
-                log::trace!("{:spaces$}-{name}", "", spaces = depth * 2);
-            }
-            Ok(XmlEvent::StartDocument {
-                version,
-                encoding,
-                standalone,
-            }) => {
-                log::trace!(
-                    "Start document: v{}, encoding {}, standalone: {:?}",
-                    version,
-                    encoding,
-                    standalone
-                );
-            }
-            Ok(XmlEvent::EndDocument) => {
-                log::trace!("End document");
-            }
-            Ok(XmlEvent::CData(something)) => {
-                log::trace!("CData: {}", something);
-            }
-            Ok(XmlEvent::Comment(comment)) => {
-                log::trace!("Comment: {}", comment);
             }
             Err(e) => {
                 log::error!("Error: {e}");
                 return None;
             }
-            // There's more: https://docs.rs/xml-rs/latest/xml/reader/enum.XmlEvent.html
-            _ => {}
         }
     }
 
@@ -249,35 +277,19 @@ pub fn write_xml_document(robot: &Robot) -> String {
             standalone: Some(true),
         });
 
-        events.push(writer::XmlEvent::StartElement {
-            name: "Robot".into(),
-            attributes: std::borrow::Cow::Owned(vec![Attribute {
-                name: "type".into(),
-                value: "FirstInspires-FTC",
-            }]),
-            namespace: std::borrow::Cow::Owned(Namespace::empty()),
-        });
+        events.push(robot.opening_event());
 
         let lynx_usb_device = robot.lynx_usb_device.as_ref().unwrap();
-
-        let lynx_parent_module_address = lynx_usb_device.parent_module_address.to_string();
+        let lynx_usb_device_attributes = lynx_usb_device.make_owned_attributes();
 
         events.push(writer::XmlEvent::StartElement {
             name: "LynxUsbDevice".into(),
-            attributes: std::borrow::Cow::Owned(vec![
-                Attribute {
-                    name: "name".into(),
-                    value: "Control Hub Portal",
-                },
-                Attribute {
-                    name: "serialNumber".into(),
-                    value: "(embedded)",
-                },
-                Attribute {
-                    name: "parentModuleAddress".into(),
-                    value: lynx_parent_module_address.as_str(),
-                },
-            ]),
+            attributes: std::borrow::Cow::Owned(
+                lynx_usb_device_attributes
+                    .iter()
+                    .map(|x| x.borrow())
+                    .collect(),
+            ),
             namespace: std::borrow::Cow::Owned(Namespace::empty()),
         });
 
@@ -287,77 +299,37 @@ pub fn write_xml_document(robot: &Robot) -> String {
             }
         }
 
-        let mut lynx_module_ports = Vec::new();
+        // This is a Vec<Vec<OwnedAttribute>>
+        let mut lynx_module_attributes = Vec::new();
 
         for module in lynx_usb_device.lynx_modules.iter() {
-            lynx_module_ports.push(
-                module
-                    .controller_meta
-                    .device_meta
-                    .port
-                    .map(|x| x.to_string())
-                    .unwrap_or(lynx_parent_module_address.clone()),
-            );
+            lynx_module_attributes.push(module.make_owned_attributes());
         }
 
         for (i, module) in lynx_usb_device.lynx_modules.iter().enumerate() {
             if let Err(e) = writer.write(writer::XmlEvent::StartElement {
                 name: "LynxModule".into(),
-                attributes: std::borrow::Cow::Owned(vec![
-                    Attribute {
-                        name: "name".into(),
-                        value: module.controller_meta.device_meta.name.as_str(),
-                    },
-                    Attribute {
-                        name: "port".into(),
-                        value: lynx_module_ports[i].as_str(),
-                    },
-                ]),
+                attributes: std::borrow::Cow::Owned(
+                    lynx_module_attributes[i]
+                        .iter()
+                        .map(|x| x.borrow())
+                        .collect(),
+                ),
                 namespace: std::borrow::Cow::Owned(Namespace::empty()),
             }) {
                 log::error!("Write error: {e}")
             }
 
-            let mut lynx_devices = Vec::new();
+            let lynx_devices = module.clone().all_devices();
 
-            lynx_devices.append(&mut module.motors.clone());
-            lynx_devices.append(&mut module.servos.clone());
-            lynx_devices.append(&mut module.i2c_devices.clone());
-            lynx_devices.append(&mut module.digital_devices.clone());
-            lynx_devices.append(&mut module.pwm_outputs.clone());
-            lynx_devices.append(&mut module.analog_inputs.clone());
-
-            for device in &lynx_devices {
-                let mut attributes = vec![Attribute {
-                    name: "name".into(),
-                    value: device.name.as_str(),
-                }];
-
-                let port_string;
-
-                if let Some(port) = device.port {
-                    port_string = port.to_string();
-
-                    attributes.push(Attribute {
-                        name: "port".into(),
-                        value: port_string.as_str(),
-                    });
-                }
-
-                let bus_string;
-
-                if let Some(bus) = device.bus {
-                    bus_string = bus.to_string();
-
-                    attributes.push(Attribute {
-                        name: "bus".into(),
-                        value: bus_string.as_str(),
-                    });
-                }
+            for device in lynx_devices {
+                let attributes = device.make_owned_attributes();
 
                 if let Err(e) = writer.write(writer::XmlEvent::StartElement {
                     name: device.xml_tag_name.as_str().into(),
-                    attributes: attributes.into(),
+                    attributes: std::borrow::Cow::Owned(
+                        attributes.iter().map(|x| x.borrow()).collect(),
+                    ),
                     namespace: std::borrow::Cow::Owned(Namespace::empty()),
                 }) {
                     log::error!("Write error: {e}")
@@ -377,14 +349,57 @@ pub fn write_xml_document(robot: &Robot) -> String {
             }
         }
 
+        // This is a Vec<Vec<OwnedAttribute>>
+        let mut servo_hub_attributes = Vec::new();
+
+        for hub in lynx_usb_device.servo_hubs.iter() {
+            servo_hub_attributes.push(hub.make_owned_attributes());
+        }
+
+        for (i, module) in lynx_usb_device.servo_hubs.iter().enumerate() {
+            if let Err(e) = writer.write(writer::XmlEvent::StartElement {
+                name: "ServoHub".into(),
+                attributes: std::borrow::Cow::Owned(
+                    servo_hub_attributes[i].iter().map(|x| x.borrow()).collect(),
+                ),
+                namespace: std::borrow::Cow::Owned(Namespace::empty()),
+            }) {
+                log::error!("Write error: {e}")
+            }
+
+            for servo in &module.servos {
+                let attributes = servo.make_owned_attributes();
+
+                if let Err(e) = writer.write(writer::XmlEvent::StartElement {
+                    name: servo.xml_tag_name.as_str().into(),
+                    attributes: std::borrow::Cow::Owned(
+                        attributes.iter().map(|x| x.borrow()).collect(),
+                    ),
+                    namespace: std::borrow::Cow::Owned(Namespace::empty()),
+                }) {
+                    log::error!("Write error: {e}")
+                }
+
+                if let Err(e) = writer.write(writer::XmlEvent::EndElement {
+                    name: Some(servo.xml_tag_name.as_str().into()),
+                }) {
+                    log::error!("Write error: {e}")
+                }
+            }
+
+            if let Err(e) = writer.write(writer::XmlEvent::EndElement {
+                name: Some("ServoHub".into()),
+            }) {
+                log::error!("Write error: {e}")
+            }
+        }
+
         events = Vec::new();
 
         events.push(writer::XmlEvent::EndElement {
             name: Some("LynxUsbDevice".into()),
         });
-        events.push(writer::XmlEvent::EndElement {
-            name: Some("Robot".into()),
-        });
+        events.push(robot.closing_event());
 
         for event in events {
             if let Err(e) = writer.write(event) {

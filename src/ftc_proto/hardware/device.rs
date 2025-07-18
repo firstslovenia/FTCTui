@@ -1,3 +1,7 @@
+//! Contains types for the CMD_NOTIFY_USER_DEVICE_LIST command,
+//! which tells us of every custom XML tag in the robot hardware
+//! configuration
+
 use serde::{Deserialize, Serialize};
 
 /// A device as described in JSON in NOTIFY_USER_DEVICE_LIST
