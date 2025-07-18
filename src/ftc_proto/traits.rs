@@ -1,3 +1,5 @@
+//! Useful traits used for packets and binary protocol data
+
 /// A trait for objects that can be written to a byte buffer
 pub trait Writeable {
     /// Appends self in bytes to the buffer
