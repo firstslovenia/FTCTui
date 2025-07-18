@@ -6,15 +6,11 @@ use crate::ftc_proto::hardware::{
     FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag,
     device::{DeviceFlavor, HardwareDeviceType},
     lynx::{LynxModule, LynxUSBDevice, ServoHub},
-    robot::{ConfigurationDevice, Robot},
+    robot::{ConfigurationDevice, EthernetOverUsbConfiguration, Robot, Webcam},
 };
 
 use xml::{
-    EmitterConfig,
-    common::XmlVersion,
-    namespace::Namespace,
-    reader::{EventReader, XmlEvent},
-    writer,
+    common::XmlVersion, namespace::Namespace, reader::{EventReader, XmlEvent}, writer, EmitterConfig, EventWriter
 };
 
 /// Tries to parse an xml robot configuration
@@ -70,6 +66,24 @@ pub fn try_parse_xml_document(
                                 None => {
                                     log::error!("Failed to parse Robot from XML! Bailing out..");
                                     return None;
+                                }
+                            },
+                            "EthernetOverUsbConfiguration" => {
+                                match EthernetOverUsbConfiguration::from_xml_tag(event) {
+                                    Some(e) => robot.ethernet_over_usb_device = Some(e),
+                                    None => {
+                                        log::warn!(
+                                            "Failed to parse Ethernet over usb configuration from XML! Ignoring.."
+                                        );
+                                    }
+                                }
+                            }
+                            "Webcam" => match Webcam::from_xml_tag(event) {
+                                Some(e) => robot.webcam = Some(e),
+                                None => {
+                                    log::warn!(
+                                        "Failed to parse Webcam configuration from XML! Ignoring.."
+                                    );
                                 }
                             },
                             "LynxUsbDevice" => match LynxUSBDevice::from_xml_tag(event) {
@@ -253,10 +267,10 @@ pub fn try_parse_xml_document(
     Some(robot)
 }
 
-/// Writes the robot configuration to an XML string
+/// Tries to write the robot configuration to an XML string
 ///
 /// clones required data
-pub fn write_xml_document(robot: &Robot) -> String {
+pub fn write_xml_document(robot: &Robot) -> Option<String> {
     unsafe {
         let mut output = String::new();
 
@@ -279,6 +293,45 @@ pub fn write_xml_document(robot: &Robot) -> String {
 
         events.push(robot.opening_event());
 
+        let webcam_attributes;
+
+        if let Some(webcam) = &robot.webcam {
+            webcam_attributes = webcam.make_owned_attributes();
+
+            events.push(writer::XmlEvent::StartElement {
+                name: "Webcam".into(),
+                attributes: std::borrow::Cow::Owned(
+                    webcam_attributes.iter().map(|x| x.borrow()).collect(),
+                ),
+                namespace: std::borrow::Cow::Owned(Namespace::empty()),
+            });
+
+            events.push(writer::XmlEvent::EndElement {
+                name: Some("Webcam".into()),
+            });
+        }
+
+        let ethernet_over_usb_attributes;
+
+        if let Some(ethernet_over_usb) = &robot.ethernet_over_usb_device {
+            ethernet_over_usb_attributes = ethernet_over_usb.make_owned_attributes();
+
+            events.push(writer::XmlEvent::StartElement {
+                name: "EthernetOverUsbConfiguration".into(),
+                attributes: std::borrow::Cow::Owned(
+                    ethernet_over_usb_attributes
+                        .iter()
+                        .map(|x| x.borrow())
+                        .collect(),
+                ),
+                namespace: std::borrow::Cow::Owned(Namespace::empty()),
+            });
+
+            events.push(writer::XmlEvent::EndElement {
+                name: Some("EthernetOverUsbConfiguration".into()),
+            });
+        }
+
         let lynx_usb_device = robot.lynx_usb_device.as_ref().unwrap();
         let lynx_usb_device_attributes = lynx_usb_device.make_owned_attributes();
 
@@ -293,11 +346,7 @@ pub fn write_xml_document(robot: &Robot) -> String {
             namespace: std::borrow::Cow::Owned(Namespace::empty()),
         });
 
-        for event in events {
-            if let Err(e) = writer.write(event) {
-                log::error!("Write error: {e}")
-            }
-        }
+		  write_xml_events(&mut writer, events)?;
 
         // This is a Vec<Vec<OwnedAttribute>>
         let mut lynx_module_attributes = Vec::new();
@@ -307,7 +356,7 @@ pub fn write_xml_document(robot: &Robot) -> String {
         }
 
         for (i, module) in lynx_usb_device.lynx_modules.iter().enumerate() {
-            if let Err(e) = writer.write(writer::XmlEvent::StartElement {
+            write_xml_event(&mut writer, writer::XmlEvent::StartElement {
                 name: "LynxModule".into(),
                 attributes: std::borrow::Cow::Owned(
                     lynx_module_attributes[i]
@@ -316,37 +365,29 @@ pub fn write_xml_document(robot: &Robot) -> String {
                         .collect(),
                 ),
                 namespace: std::borrow::Cow::Owned(Namespace::empty()),
-            }) {
-                log::error!("Write error: {e}")
-            }
+            })?;
 
             let lynx_devices = module.clone().all_devices();
 
             for device in lynx_devices {
                 let attributes = device.make_owned_attributes();
 
-                if let Err(e) = writer.write(writer::XmlEvent::StartElement {
+                write_xml_event(&mut writer, writer::XmlEvent::StartElement {
                     name: device.xml_tag_name.as_str().into(),
                     attributes: std::borrow::Cow::Owned(
                         attributes.iter().map(|x| x.borrow()).collect(),
                     ),
                     namespace: std::borrow::Cow::Owned(Namespace::empty()),
-                }) {
-                    log::error!("Write error: {e}")
-                }
+                })?;
 
-                if let Err(e) = writer.write(writer::XmlEvent::EndElement {
+                write_xml_event(&mut writer, writer::XmlEvent::EndElement {
                     name: Some(device.xml_tag_name.as_str().into()),
-                }) {
-                    log::error!("Write error: {e}")
-                }
+                })?;
             }
 
-            if let Err(e) = writer.write(writer::XmlEvent::EndElement {
+            write_xml_event(&mut writer, writer::XmlEvent::EndElement {
                 name: Some("LynxModule".into()),
-            }) {
-                log::error!("Write error: {e}")
-            }
+            })?;
         }
 
         // This is a Vec<Vec<OwnedAttribute>>
@@ -357,41 +398,33 @@ pub fn write_xml_document(robot: &Robot) -> String {
         }
 
         for (i, module) in lynx_usb_device.servo_hubs.iter().enumerate() {
-            if let Err(e) = writer.write(writer::XmlEvent::StartElement {
+            write_xml_event(&mut writer, writer::XmlEvent::StartElement {
                 name: "ServoHub".into(),
                 attributes: std::borrow::Cow::Owned(
                     servo_hub_attributes[i].iter().map(|x| x.borrow()).collect(),
                 ),
                 namespace: std::borrow::Cow::Owned(Namespace::empty()),
-            }) {
-                log::error!("Write error: {e}")
-            }
+            })?;
 
             for servo in &module.servos {
                 let attributes = servo.make_owned_attributes();
 
-                if let Err(e) = writer.write(writer::XmlEvent::StartElement {
+                write_xml_event(&mut writer, writer::XmlEvent::StartElement {
                     name: servo.xml_tag_name.as_str().into(),
                     attributes: std::borrow::Cow::Owned(
                         attributes.iter().map(|x| x.borrow()).collect(),
                     ),
                     namespace: std::borrow::Cow::Owned(Namespace::empty()),
-                }) {
-                    log::error!("Write error: {e}")
-                }
+                })?;
 
-                if let Err(e) = writer.write(writer::XmlEvent::EndElement {
+                write_xml_event(&mut writer, writer::XmlEvent::EndElement {
                     name: Some(servo.xml_tag_name.as_str().into()),
-                }) {
-                    log::error!("Write error: {e}")
-                }
+                })?;
             }
 
-            if let Err(e) = writer.write(writer::XmlEvent::EndElement {
+            write_xml_event(&mut writer, writer::XmlEvent::EndElement {
                 name: Some("ServoHub".into()),
-            }) {
-                log::error!("Write error: {e}")
-            }
+            })?;
         }
 
         events = Vec::new();
@@ -401,12 +434,34 @@ pub fn write_xml_document(robot: &Robot) -> String {
         });
         events.push(robot.closing_event());
 
-        for event in events {
-            if let Err(e) = writer.write(event) {
-                log::error!("Write error: {e}")
-            }
-        }
+		  write_xml_events(&mut writer, events)?;
 
-        return output;
+        return Some(output);
     }
+}
+
+/// Helper function to reduce boilerplate in our main XML writer function
+fn write_xml_event(writer: &mut EventWriter<Cursor<&mut Vec<u8>>>, event: xml::writer::XmlEvent) -> Option<()> {
+	match writer.write(event) {
+		Ok(_) => Some(()),
+		Err(e) => {
+         log::error!("Write error: {e}");
+			None
+		}
+	}
+}
+
+/// Helper function to reduce boilerplate in our main XML writer function
+fn write_xml_events(writer: &mut EventWriter<Cursor<&mut Vec<u8>>>, events: Vec<xml::writer::XmlEvent>) -> Option<()> {
+	for event in events {
+match writer.write(event) {
+		Ok(_) => {},
+		Err(e) => {
+         log::error!("Write error: {e}");
+			return None;
+		}
+	}
+	}
+
+	Some(())
 }

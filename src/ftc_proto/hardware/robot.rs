@@ -1,5 +1,7 @@
 //! Contains the root XML tags for the robot hardware configuration
 
+use std::{net::IpAddr, str::FromStr};
+
 use serde::{Deserialize, Serialize};
 use xml::{
     attribute::{Attribute, OwnedAttribute},
@@ -55,10 +57,8 @@ pub struct Robot {
     pub r#type: Option<String>,
     /// Parent of our Control and Expansion hub objects
     pub lynx_usb_device: Option<LynxUSBDevice>,
-    /// TODO
-    pub webcam: Option<u8>,
-    /// TODO
-    pub ethernet_over_usb_device: Option<u8>,
+    pub webcam: Option<Webcam>,
+    pub ethernet_over_usb_device: Option<EthernetOverUsbConfiguration>,
 }
 
 impl MakeXMLTagAttributes for Robot {
@@ -125,6 +125,157 @@ impl FromXMLTag for Robot {
                     webcam: None,
                     ethernet_over_usb_device: None,
                 })
+            }
+            _ => {
+                log::error!("Event is not a StartElement event!");
+                None
+            }
+        }
+    }
+}
+
+/// A configuration for a webcam, a child of [Robot]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Webcam {
+    pub controller_meta: ConfigurationController,
+
+    /// False by default
+    pub auto_open: bool,
+}
+
+impl MakeOwnedXMLTagAttributes for Webcam {
+    fn make_owned_attributes(&self) -> Vec<xml::attribute::OwnedAttribute> {
+        let mut attributes = self.controller_meta.make_owned_attributes();
+
+        attributes.push(OwnedAttribute {
+            name: OwnedName {
+                local_name: "autoOpen".to_string(),
+                namespace: None,
+                prefix: None,
+            },
+            value: self.auto_open.to_string(),
+        });
+
+        attributes
+    }
+}
+
+impl FromXMLTag for Webcam {
+    fn from_xml_tag(event: xml::reader::XmlEvent) -> Option<Self> {
+        let controller_meta = ConfigurationController::from_xml_tag(event.clone())?;
+
+        match event {
+            xml::reader::XmlEvent::StartElement {
+                name: tag_name,
+                attributes,
+                namespace: _namespace,
+            } => {
+                if tag_name.to_string().as_str() != "Webcam" {
+                    log::error!(
+                        "Name of element is {}, expected Webcam",
+                        tag_name.to_string()
+                    );
+                    return None;
+                }
+
+                let mut auto_open = false;
+
+                for attr in attributes {
+                    if attr.name.to_string().as_str() == "autoOpen" {
+                        match attr.value.parse() {
+                            Ok(b) => auto_open = b,
+                            Err(e) => {
+                                log::error!(
+                                    "Failed to parse autoOpen as bool: {} ({})",
+                                    e,
+                                    attr.value
+                                );
+                                return None;
+                            }
+                        }
+                    }
+                }
+
+                return Some(Self {
+                    controller_meta,
+                    auto_open,
+                });
+            }
+            _ => {
+                log::error!("Event is not a StartElement event!");
+                None
+            }
+        }
+    }
+}
+
+/// A configuration for ethernet over usb, a child of [Robot]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EthernetOverUsbConfiguration {
+    pub controller_meta: ConfigurationController,
+
+    /// 127.0.0.1 by default; I think? it has to be provided in the XML
+    pub ip_address: IpAddr,
+}
+
+impl MakeOwnedXMLTagAttributes for EthernetOverUsbConfiguration {
+    fn make_owned_attributes(&self) -> Vec<xml::attribute::OwnedAttribute> {
+        let mut attributes = self.controller_meta.make_owned_attributes();
+
+        attributes.push(OwnedAttribute {
+            name: OwnedName {
+                local_name: "ipAddress".to_string(),
+                namespace: None,
+                prefix: None,
+            },
+            value: self.ip_address.to_string(),
+        });
+
+        attributes
+    }
+}
+
+impl FromXMLTag for EthernetOverUsbConfiguration {
+    fn from_xml_tag(event: xml::reader::XmlEvent) -> Option<Self> {
+        let controller_meta = ConfigurationController::from_xml_tag(event.clone())?;
+
+        match event {
+            xml::reader::XmlEvent::StartElement {
+                name: tag_name,
+                attributes,
+                namespace: _namespace,
+            } => {
+                if tag_name.to_string().as_str() != "EthernetOverUsbConfiguration" {
+                    log::error!(
+                        "Name of element is {}, expected EthernetOverUsbConfiguration",
+                        tag_name.to_string()
+                    );
+                    return None;
+                }
+
+                let mut ip_addr = None;
+
+                for attr in attributes {
+                    if attr.name.to_string().as_str() == "ipAddress" {
+                        match IpAddr::from_str(attr.value.as_str()) {
+                            Ok(ip) => ip_addr = Some(ip),
+                            Err(e) => {
+                                log::error!("Failed to parse ipAddress: {} ({})", e, attr.value);
+                                return None;
+                            }
+                        }
+                    }
+                }
+
+                let Some(ip_address) = ip_addr else {
+                    log::error!("Missing field ipAddress in EthernetOverUsbConfiguration");
+                    return None;
+                };
+
+                return Some(Self {
+                    controller_meta,
+                    ip_address,
+                });
             }
             _ => {
                 log::error!("Event is not a StartElement event!");

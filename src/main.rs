@@ -4,10 +4,7 @@ use app::App;
 use clap::Parser;
 use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger};
 
-use crate::ftc_proto::hardware::{
-    device::HardwareDeviceType,
-    document::{try_parse_xml_document, write_xml_document},
-};
+use crate::ftc_proto::hardware::document::{try_parse_xml_document, write_xml_document};
 
 pub mod app;
 pub mod command;
@@ -127,7 +124,7 @@ async fn main() -> color_eyre::Result<()> {
 
         log::info!("{:?}", a);
 
-        let b = write_xml_document(&a);
+        let b = write_xml_document(&a).unwrap();
 
         log::info!("{}", b);
         return Ok(());

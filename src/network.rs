@@ -841,7 +841,7 @@ impl NetworkHandler {
 
                     log::info!("Robot config: {:?}", types);
 
-                    let re_written = write_xml_document(&robot);
+                    let re_written = write_xml_document(&robot).unwrap();
 
                     log::info!("Re-written to xml: {}", re_written);
                 } else {
