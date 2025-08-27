@@ -5,7 +5,7 @@
 
  <p align="center">
     <br />
-    <a href="https://firsttech.si/docs/ftctui">Read the docs</a>
+    <a href="https://firstslo.si/docs/ftctui">Read the docs</a>
     <br />
  </p>
 
@@ -132,7 +132,7 @@ The log file will be created at `ftctui.log`.
 
 You can pass the option `-e` or `--export-telemetry`, which will dump all telemetry packets into `telemetry_log.json` in the active directory.
 
-[Read more about how to use this file](https://firsttech.si/docs/ftctui/graphs-with-telemetry)
+[Read more about how to use this file](https://firstslo.si/docs/ftctui/graphs-with-telemetry)
 
 ## Troubleshooting
 
