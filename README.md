@@ -1,6 +1,6 @@
 
 <p align="center">
-	<img src="assets/banner.png" alt="project banner, looks like a shell prompt with large text reading FTC Tui" max-height="128px"/>
+	<img src="assets/banner.png" alt="project banner, looks like a shell prompt with large text reading FTC Tui" height="128px"/>
 </p>
 
  <p align="center">
