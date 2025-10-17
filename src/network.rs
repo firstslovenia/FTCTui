@@ -425,7 +425,7 @@ impl NetworkHandler {
 
                          log::debug!("Sending robot heartbeat request..");
 
-                         let packet = Packet::from_packet_type_and_writable(PacketType::Heartbeat, &HeartbeatPacketData {sequence_number: 10003, peer_type: 1, sdk_build_month: 1, sdk_build_year: 2025, sdk_major_version: 10, sdk_minor_version: 2});
+                         let packet = Packet::from_packet_type_and_writable(PacketType::Heartbeat, &HeartbeatPacketData {sequence_number: 10003, peer_type: 1, sdk_build_month: 8, sdk_build_year: 2025, sdk_major_version: 11, sdk_minor_version: 0});
 
                          send_packet(&self.socket, packet).await;
 
