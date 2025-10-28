@@ -376,9 +376,11 @@ impl Gamepad {
         GamepadPacketData {
             gamepad_id: usize::from(gamepad.id()) as i32,
             left_stick_x: gamepad.value(Axis::LeftStickX),
-            left_stick_y: gamepad.value(Axis::LeftStickY),
+				// Note: up is negative, different than the convention
+            left_stick_y: -gamepad.value(Axis::LeftStickY),
             right_stick_x: gamepad.value(Axis::RightStickX),
-            right_stick_y: gamepad.value(Axis::RightStickY),
+				// Note: up is negative, different than the convention
+            right_stick_y: -gamepad.value(Axis::RightStickY),
             timestamp,
             // FIXME: unideal, but we can't? get the analog value from gilrs
             //
