@@ -9,13 +9,6 @@ use std::{
 use crate::{
     app::{get_timestamp_millis, get_timestamp_nanos},
     ftc_proto::{
-        gamepad_packet::GamepadPacketData,
-        hardware::{
-            device::HardwareDeviceType,
-            document::{try_parse_xml_document, write_xml_document},
-        },
-        heartbeat_packet::HeartbeatPacketData,
-        packet::{Packet, PacketType},
         command_packet::{
             CommandPacketData, INIT_OPMODE, NOTIFY_ACTIVE_CONFIGURATION,
             NOTIFY_CONFIGURATION_TYPES, NOTIFY_INIT_OPMODE, NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES,
@@ -23,6 +16,13 @@ use crate::{
             REQUEST_CONFIGURATION, REQUEST_CONFIGURATION_RESPONSE, REQUEST_OP_MODES,
             RobotConfigurationFile, SHOW_STACKTRACE,
         },
+        gamepad_packet::GamepadPacketData,
+        hardware::{
+            device::HardwareDeviceType,
+            document::{try_parse_xml_document, write_xml_document},
+        },
+        heartbeat_packet::HeartbeatPacketData,
+        packet::{Packet, PacketType},
         telemetry_packet::{
             ROBOT_BATTERY_LEVEL_KEY, ROBOT_CONTROLLER_BATTERY_STATUS_KEY, SYSTEM_ERROR_KEY,
             SYSTEM_NONE_KEY, SYSTEM_WARNING_KEY, TelemetryEntry, TelemetryPacketData,
@@ -430,7 +430,7 @@ impl NetworkHandler {
 
                          log::debug!("Sending robot heartbeat request..");
 
-                         let packet = Packet::from_packet_type_and_writable(PacketType::Heartbeat, &HeartbeatPacketData {sequence_number: 10003, peer_type: 1, sdk_build_month: 1, sdk_build_year: 2025, sdk_major_version: 10, sdk_minor_version: 2});
+                         let packet = Packet::from_packet_type_and_writable(PacketType::Heartbeat, &HeartbeatPacketData {sequence_number: 10003, peer_type: 1, sdk_build_month: 8, sdk_build_year: 2025, sdk_major_version: 11, sdk_minor_version: 0});
 
                          send_packet(&self.socket, packet).await;
 

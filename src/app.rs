@@ -16,11 +16,12 @@ use async_lock::{Mutex, RwLock};
 use crate::{
     Args,
     ftc_proto::command_packet::{
-        CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RUN_OPMODE,
+        CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RESTART_ROBOT,
+        RUN_OPMODE,
     },
     gamepad_map::{self, AsyncGilrs, REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX},
     input::Gamepad,
-    network::{SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
+    network::{NetworkStatus, SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
     popup::Popup,
     robot::Robot,
 };
@@ -306,6 +307,28 @@ impl App {
             self.shared_network_data.clone(),
         )
         .await;
+    }
+
+    /// Restarts the robot
+    pub async fn restart_robot(&mut self) {
+        send_command(
+            &self.socket,
+            CommandPacketData {
+                acknowledged: false,
+                command: RESTART_ROBOT.to_string(),
+                timestamp: get_timestamp_nanos(),
+                data: String::new(),
+            },
+            self.shared_network_data.clone(),
+        )
+        .await;
+
+        self.shared_network_data.write().await.state = NetworkStatus::Disconnected;
+
+        // Note: unsure if correct
+        let mut robot = self.robot.write().await;
+        robot.active_opmode = OPMODE_STOP.to_string();
+        robot.active_opmode_state = None;
     }
 
     /// Set running to false to quit the application.

@@ -22,7 +22,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/release/ftctui.exe
-          asset_name: ftctui_${{ github.ref }}_windows_x64.exe
+          asset_name: ftctui_windows_x64.exe
           tag: ${{ github.ref }}
 
   release-linux:
@@ -43,5 +43,18 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/release/ftctui
-          asset_name: ftctui_${{ github.ref }}_linux_x64
+          asset_name: ftctui_linux_x64
+          tag: ${{ github.ref }}
+      - name: Download appimagetool
+        run: wget github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage && chmod +x ./appimagetool-x86_64.AppImage
+      - name: Create appdir
+        run: ./create_appdir.sh
+      - name: Create appimage
+        run: ARCH=x86_64 ./appimagetool-x86_64.AppImage FTCTui.AppDir
+      - name: Upload appimage release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./ftctui-x86_64.AppImage
+          asset_name: ftctui_linux_x64.AppImage
           tag: ${{ github.ref }}

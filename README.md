@@ -1,11 +1,11 @@
 
 <p align="center">
-	<img src="assets/banner.png" alt="project banner, looks like a shell prompt with large text reading FTC Tui" max-height="128px"/>
+	<img src="assets/banner.png" alt="project banner, looks like a shell prompt with large text reading FTC Tui" height="128px"/>
 </p>
 
  <p align="center">
     <br />
-    <a href="https://firsttech.si/docs/ftctui">Read the docs</a>
+    <a href="https://firstslo.si/docs/ftctui">Read the docs</a>
     <br />
  </p>
 
@@ -13,7 +13,7 @@ FTC Tui is a desktop app written in rust which aims to be a drop-in replacement 
 
 For ease of development and performance reasons, it was created as a terminal user interface (TUI).
 
-<img src="assets/screenshot-old.png" alt="screenshot of the main ui"/>
+<img src="assets/screenshot.png" alt="screenshot of the main ui"/>
 
 ## FAQ
 
@@ -132,7 +132,7 @@ The log file will be created at `ftctui.log`.
 
 You can pass the option `-e` or `--export-telemetry`, which will dump all telemetry packets into `telemetry_log.json` in the active directory.
 
-[Read more about how to use this file](https://firsttech.si/docs/ftctui/graphs-with-telemetry)
+[Read more about how to use this file](https://firstslo.si/docs/ftctui/graphs-with-telemetry)
 
 ## Troubleshooting
 

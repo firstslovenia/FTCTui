@@ -1,7 +1,10 @@
 use crate::ftc_proto::{
-    self, hardware::device::HardwareDeviceType, command_packet::{
-        OpModeData, OpModeFlavor, RobotConfigurationFile, DEFAULT_OPMODE_GROUP, OPMODE_STOP
-    }, time_packet::RobotOpmodeState
+    self,
+    command_packet::{
+        DEFAULT_OPMODE_GROUP, OPMODE_STOP, OpModeData, OpModeFlavor, RobotConfigurationFile,
+    },
+    hardware::device::HardwareDeviceType,
+    time_packet::RobotOpmodeState,
 };
 
 #[derive(Clone, PartialEq, Debug)]
