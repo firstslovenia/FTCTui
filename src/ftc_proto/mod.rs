@@ -1,10 +1,10 @@
 //! Includes rust types for FTC's protocol between the FTC robot controller app and a control hub
 
+pub mod command_packet;
 pub mod gamepad_packet;
 pub mod hardware;
 pub mod heartbeat_packet;
 pub mod packet;
-pub mod command_packet;
 pub mod telemetry_packet;
 pub mod time_packet;
 pub mod traits;
@@ -12,10 +12,10 @@ pub mod traits;
 pub mod test_deserializer {
 
     use super::{
+        command_packet::CommandPacketData,
         gamepad_packet::GamepadPacketData,
         heartbeat_packet::HeartbeatPacketData,
         packet::{Packet, PacketType},
-        command_packet::CommandPacketData,
         telemetry_packet::TelemetryPacketData,
         time_packet::TimePacketData,
         traits::Readable,

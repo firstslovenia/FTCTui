@@ -18,6 +18,7 @@ use crate::{
     },
     ftc_proto::{gamepad_packet::ButtonFlags, time_packet::RobotOpmodeState},
     network::NetworkStatus,
+    renderers,
 };
 
 pub mod styles;
@@ -663,7 +664,7 @@ impl App {
         let popup = futures::executor::block_on(popup.lock());
 
         let block = Block::bordered()
-            .title("Alert (enter to close)")
+            .title(popup.title())
             .border_style(block_style())
             .padding(Padding::new(2, 2, 1, 1));
 
@@ -687,6 +688,8 @@ impl App {
             }
         }
 
+        let should_render_options = popup.options().len() > 1;
+
         // Test the height..
         let [area] = vertical.areas(frame.area());
         let [area] = horizontal.areas(area);
@@ -700,7 +703,37 @@ impl App {
         if lines > frame.area().height {
             vertical = Layout::vertical([Constraint::Percentage(75)]).flex(Flex::Center);
         } else {
-            vertical = Layout::vertical([Constraint::Length(lines + 4)]).flex(Flex::Center);
+            // 5: 4 to just fit, +1 for the options
+            let mut height = lines + 4;
+
+            if should_render_options {
+                height += 1;
+            }
+
+            vertical = Layout::vertical([Constraint::Length(height)]).flex(Flex::Center);
+        }
+
+        // Build options
+        let mut options = Vec::new();
+
+        if should_render_options {
+            for (i, option) in popup.options().into_iter().enumerate() {
+                if i > 0 {
+                    options.push(Span::raw(" "));
+                }
+
+                if popup.selected_option() == i as u8 {
+                    options.push(Span::styled(
+                        option,
+                        Style::default().bg(SELECTED_BACKGROUND).fg(TEXT_COLOR),
+                    ));
+                } else {
+                    options.push(Span::styled(
+                        option,
+                        Style::default().fg(renderers::MUTED_TEXT_COLOR),
+                    ));
+                }
+            }
         }
 
         // Build it properly
@@ -709,13 +742,21 @@ impl App {
 
         let block_inner_area = block.inner(area);
 
-        //let inner_layout =
-        //    Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).split(block_inner_area);
+        let inner_layout = if should_render_options {
+            Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).split(block_inner_area)
+        } else {
+            Layout::vertical([Constraint::Fill(1)]).split(block_inner_area)
+        };
 
         frame.render_widget(Clear, area);
         frame.render_widget(block, area);
+
         frame.render_widget(Clear, block_inner_area);
-        frame.render_widget(popup.text(), block_inner_area);
-        // Todo: add options
+        frame.render_widget(popup.text(), inner_layout[0]);
+
+        if should_render_options {
+            frame.render_widget(Clear, inner_layout[1]);
+            frame.render_widget(Line::from(options), inner_layout[1]);
+        }
     }
 }

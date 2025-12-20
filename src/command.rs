@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use ratatui::widgets::Paragraph;
 use async_lock::Mutex;
+use ratatui::widgets::Paragraph;
 
-use crate::{app::App, popup::InfoPopup};
+use crate::{
+    app::App,
+    popup::{InfoPopup, RestartRobotPopup},
+};
 
 impl App {
     /// Executes a command buffer
@@ -94,6 +97,14 @@ impl App {
             }
             "stopopmode" | "stop" => {
                 self.stop_opmode().await;
+            }
+            "restart" | "restartrobot" | "rr" => {
+                self.active_popup = Some(Arc::new(Mutex::new(RestartRobotPopup {
+                    selected_yes: false,
+                })));
+            }
+            "restartnow" | "restartrobotnow" | "rrnow" => {
+                self.restart_robot().await;
             }
             _ => {
                 self.show_toast(format!("Invalid or incomplete command {}", command));

@@ -8,7 +8,7 @@ use std::{os::unix::process::CommandExt, process::Command};
 pub fn try_run_in_terminal() {
     let mut args = vec!["-e".to_string()];
     args.append(&mut std::env::args().collect::<Vec<String>>());
-	 args.push("--skip-tty-check".to_string());
+    args.push("--skip-tty-check".to_string());
 
     let terminals = ["alacritty", "konsole", "mlterm", "st", "xterm", "lxterm"];
 

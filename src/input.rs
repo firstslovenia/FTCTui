@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use async_lock::Mutex;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
@@ -7,10 +10,11 @@ use crate::{
         get_timestamp_millis,
     },
     ftc_proto::{
-        gamepad_packet::{ButtonFlags, GamepadPacketData},
         command_packet::OPMODE_STOP,
+        gamepad_packet::{ButtonFlags, GamepadPacketData},
         time_packet::RobotOpmodeState,
     },
+    popup::RestartRobotPopup,
 };
 
 use gilrs::{Axis, Button, GamepadId, Gilrs, MappingSource};
@@ -34,6 +38,13 @@ impl App {
             (_, KeyCode::Char('q'))
             | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit().await,
 
+            // Restart handler
+            (_, KeyCode::Char('r')) => {
+                self.active_popup = Some(Arc::new(Mutex::new(RestartRobotPopup {
+                    selected_yes: false,
+                })))
+            }
+
             // Change modes into command mode
             (_, KeyCode::Char(':')) => {
                 self.mode = AppMode::InsertCommand;
@@ -53,11 +64,11 @@ impl App {
                 }
 
                 // Move selected option forwards and backwards
-                (_, KeyCode::Tab) | (_, KeyCode::Right) => {
+                (_, KeyCode::Tab) | (_, KeyCode::Right) | (_, KeyCode::Char('l')) => {
                     popup.lock().await.select_next_option();
                 }
 
-                (_, KeyCode::BackTab) | (_, KeyCode::Left) => {
+                (_, KeyCode::BackTab) | (_, KeyCode::Left) | (_, KeyCode::Char('h')) => {
                     popup.lock().await.select_previous_option();
                 }
 
@@ -376,10 +387,10 @@ impl Gamepad {
         GamepadPacketData {
             gamepad_id: usize::from(gamepad.id()) as i32,
             left_stick_x: gamepad.value(Axis::LeftStickX),
-				// Note: up is negative, different than the convention
+            // Note: up is negative, different than the convention
             left_stick_y: -gamepad.value(Axis::LeftStickY),
             right_stick_x: gamepad.value(Axis::RightStickX),
-				// Note: up is negative, different than the convention
+            // Note: up is negative, different than the convention
             right_stick_y: -gamepad.value(Axis::RightStickY),
             timestamp,
             // FIXME: unideal, but we can't? get the analog value from gilrs
