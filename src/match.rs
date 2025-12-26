@@ -1,6 +1,6 @@
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
-use tokio::task::JoinHandle;
+use tokio::{process::Command, task::JoinHandle};
 
 /// Used for match timers and sfx
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -10,6 +10,18 @@ pub struct Match {
 }
 
 impl Match {
+    /// Creates a new match, starting now
+    pub fn new() -> Match {
+        Match {
+            start: std::time::Instant::now(),
+        }
+    }
+
+    /// Creates a new match from a given start time
+    pub fn from_start_time(start_time: std::time::Instant) -> Match {
+        Match { start: start_time }
+    }
+
     /// Returns the current phase of the match
     pub fn phase(&self) -> MatchPhase {
         let elapsed = self.start.elapsed();
@@ -91,9 +103,59 @@ pub struct MatchSFXHandler {
 }
 
 impl MatchSFXHandler {
+    // This is the easiest solution I've found to play sounds
+    /// Construct a command on the local OS to play the written sound file
+    fn construct_play_command(path: &PathBuf) -> Option<Command> {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "linux")] {
+                let mut command = Command::new("aplay");
+                command.arg("--quiet").arg(path.to_str().expect("Play command file path was not valid unicode -- please open an issue on github: https://github.com/firstslovenia/FTCTui/issues"));
+                Some(command)
+            } else if #[cfg(target_os = "macos")] {
+                let mut command = Command::new("afplay");
+                command.arg(path.to_str().expect("Play command file path was not valid unicode -- please open an issue on github: https://github.com/firstslovenia/FTCTui/issues"));
+                Some(command)
+            } else if #[cfg(target_os = "windows")] {
+                let mut command = Command::new("powershell");
+                command.arg("-c");
+                command.arg(format!("(New-Object Media.SoundPlayer \"{}\").PlaySync();", path.to_str().expect("Play command file path was not valid unicode -- please open an issue on github: https://github.com/firstslovenia/FTCTui/issues")));
+                Some(command)
+            } else {
+                None
+            }
+        }
+    }
+
     /// Plays the provided sound
     pub async fn play_sound(sfx: MatchSFX) {
-        log::info!("Play {:?}", sfx);
+        log::info!("Playing {:?}", sfx);
+
+        let path = match sfx.ensure_on_filesystem() {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Failed to write temp file for audio playback: {e}");
+                return;
+            }
+        };
+
+        let Some(mut command) = Self::construct_play_command(&path) else {
+            log::error!(
+                "Failed to create audio playback command, are you on linux, macos or windows?"
+            );
+            return;
+        };
+
+        let status = match command.status().await {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("Failed to spawn playback command: {e}");
+                return;
+            }
+        };
+
+        if !status.success() {
+            log::error!("Playback command returned non-zero exit status: {status}");
+        }
     }
 
     /// A thread which plays audio by awaiting timeouts
@@ -155,6 +217,20 @@ impl MatchSFXHandler {
             }
         }
     }
+
+    /// Spawns a new SFX handler, returning the channel to send matches with
+    pub async fn spawn() -> tokio::sync::broadcast::Sender<Option<Match>> {
+        let (sender, receiver) = tokio::sync::broadcast::channel(2);
+
+        let mut sfx_handler = MatchSFXHandler {
+            thread: None,
+            receiver,
+        };
+
+        tokio::task::spawn(async move { sfx_handler.handler_thread().await });
+
+        sender
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -169,6 +245,7 @@ pub enum MatchSFX {
 }
 
 impl MatchSFX {
+    /// Returns the included audio bytes
     pub fn wav_file(&self) -> &[u8] {
         match self {
             MatchSFX::MatchStart01 => MATCH_START_01_WAV,
@@ -178,6 +255,32 @@ impl MatchSFX {
             MatchSFX::Endgame05 => ENDGAME_05_WAV,
             MatchSFX::End06 => END_06_WAV,
             MatchSFX::Abortmatch => ABORT_MATCH_WAV,
+        }
+    }
+
+    /// Returns a filename for this sfx (used for [MatchSFX::ensure_on_filesystem])
+    pub fn file_name(&self) -> &'static str {
+        match self {
+            MatchSFX::MatchStart01 => "ftctui_01.wav",
+            MatchSFX::Drivers02 => "ftctui_02.wav",
+            MatchSFX::Countdown03 => "ftctui_03.wav",
+            MatchSFX::TeleopStart04 => "ftctui_04.wav",
+            MatchSFX::Endgame05 => "ftctui_05.wav",
+            MatchSFX::End06 => "ftctui_06.wav",
+            MatchSFX::Abortmatch => "ftctui_abort.wav",
+        }
+    }
+
+    /// Ensures the sfx is on the filesystem
+    pub fn ensure_on_filesystem(&self) -> std::io::Result<std::path::PathBuf> {
+        let bytes = self.wav_file();
+
+        let mut file_path = std::env::temp_dir();
+        file_path.push(self.file_name());
+
+        match std::fs::write(&file_path, bytes) {
+            Ok(_) => Ok(file_path),
+            Err(e) => Err(e),
         }
     }
 }
