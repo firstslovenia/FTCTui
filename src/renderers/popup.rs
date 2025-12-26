@@ -148,8 +148,13 @@ impl App {
                 QUICKMENU_OPTION_CLOSE_QUICKMENU => quickmenu_options.push(QUICKMENU_TEXT_CLOSE),
                 QUICKMENU_OPTION_RESTART_ROBOT => quickmenu_options.push(QUICKMENU_TEXT_RESTART),
                 QUICKMENU_OPTION_TOGGLE_MATCH => {
-                    // TODO: check if a match is active
-                    quickmenu_options.push(QUICKMENU_TEXT_START_MATCH);
+                    if let Some(active_match) = self.active_match
+                        && !active_match.is_over()
+                    {
+                        quickmenu_options.push(QUICKMENU_TEXT_STOP_MATCH);
+                    } else {
+                        quickmenu_options.push(QUICKMENU_TEXT_START_MATCH);
+                    }
                 }
                 QUICKMENU_OPTION_EXIT_APP => quickmenu_options.push(QUICKMENU_TEXT_EXIT_APP),
                 _ => {}

@@ -17,6 +17,7 @@ use crate::{
         gamepad_packet::{ButtonFlags, GamepadPacketData},
         time_packet::RobotOpmodeState,
     },
+    r#match::Match,
     popup::RestartRobotPopup,
     renderers::popup::{
         QUICKMENU_OPTION_CLOSE_QUICKMENU, QUICKMENU_OPTION_EXIT_APP,
@@ -60,7 +61,12 @@ impl App {
 
             // Open quickmenu
             (_, KeyCode::Char('q')) => {
-                self.quickmenu_state = Some(ListState::default());
+					 let mut state = ListState::default();
+
+					 // Bandaid fix for having to press twice to move down for the first time
+					 state.select_next();
+
+                self.quickmenu_state = Some(state);
             }
 
             _ => {}
@@ -79,7 +85,14 @@ impl App {
                             })))
                         }
                         QUICKMENU_OPTION_TOGGLE_MATCH => {
-                            // TODO
+                            if self.active_match.is_some() {
+                                let _ = self.match_sender.send(None);
+                                self.active_match = None;
+                            } else {
+                                let m = Match::new();
+                                let _ = self.match_sender.send(Some(m.clone()));
+                                self.active_match = Some(m);
+                            }
                         }
                         QUICKMENU_OPTION_EXIT_APP => {
                             self.quit().await;

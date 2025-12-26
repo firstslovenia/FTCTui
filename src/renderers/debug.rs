@@ -7,6 +7,7 @@ use ratatui::{
 use crate::{
     app::App,
     network::NetworkStatus,
+    r#match::Match,
     renderers::styles::{ERROR_COLOR, MUTED_TEXT_COLOR, SUCCESS_COLOR, TEXT_COLOR, WARNING_COLOR},
 };
 
@@ -66,6 +67,38 @@ impl App {
 
         debug_text.push(Line::from(last_packet_line));
 
+        debug_text.push(Line::from(""));
+        self.add_active_match_to_lines(&mut debug_text);
+
         Paragraph::new(debug_text).wrap(Wrap { trim: false })
+    }
+
+    /// Adds text to display info about the active match to a vector of lines
+    fn add_active_match_to_lines(&self, line_vec: &mut Vec<Line>) {
+        let Some(active_match) = self.active_match else {
+            return;
+        };
+
+        if active_match.start.elapsed() > Match::length() + std::time::Duration::from_secs(20) {
+            return;
+        }
+
+        let phase = active_match.phase();
+        let remaining_in_phase = active_match.remaining_in_phase();
+        let elapsed = active_match.start.elapsed();
+
+        line_vec.push(Line::from(vec![
+            Span::styled(format!("{:?}", phase), Style::new().fg(SUCCESS_COLOR)),
+            Span::styled(" - ", Style::new().fg(MUTED_TEXT_COLOR)),
+            Span::styled(
+                format!("{:.1?} left", remaining_in_phase),
+                Style::new().fg(TEXT_COLOR),
+            ),
+            Span::styled(
+                format!(" ({:.1?} elapsed)", elapsed),
+                Style::new().fg(MUTED_TEXT_COLOR),
+            ),
+        ]));
+        line_vec.push(Line::from(""));
     }
 }

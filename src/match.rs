@@ -63,6 +63,18 @@ impl Match {
             }
         }
     }
+
+    /// Returns whether the match is already over
+    pub fn is_over(&self) -> bool {
+        self.phase() == MatchPhase::None
+    }
+
+    /// Returns the full duration of a match
+    pub fn length() -> std::time::Duration {
+        MatchPhase::Autonomous.length()
+            + MatchPhase::Transition.length()
+            + MatchPhase::Teleop.length()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
