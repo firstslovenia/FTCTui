@@ -1,15 +1,31 @@
 use ratatui::{
-    Frame,
     layout::{Constraint, Flex, Layout},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Clear, Padding},
+    widgets::{Block, Clear, List, ListItem, Padding},
+    Frame,
 };
 
 use crate::{
     app::App,
-    renderers::styles::{MUTED_TEXT_COLOR, SELECTED_BACKGROUND, TEXT_COLOR, block_style},
+    renderers::styles::{block_style, MUTED_TEXT_COLOR, SELECTED_BACKGROUND, TEXT_COLOR},
 };
+
+// Indexes of each quickmenu option
+pub const QUICKMENU_OPTION_CLOSE_QUICKMENU: usize = 0;
+pub const QUICKMENU_OPTION_RESTART_ROBOT: usize = 1;
+pub const QUICKMENU_OPTION_TOGGLE_MATCH: usize = 2;
+pub const QUICKMENU_OPTION_EXIT_APP: usize = 3;
+
+/// How many options the quickmenu has
+pub const QUICKMENU_OPTIONS_NUM: usize = 4;
+
+// Text of each quickmenu option
+pub const QUICKMENU_TEXT_CLOSE: &str = "Close Quickmenu";
+pub const QUICKMENU_TEXT_RESTART: &str = "Restart Robot";
+pub const QUICKMENU_TEXT_START_MATCH: &str = "Start Match";
+pub const QUICKMENU_TEXT_STOP_MATCH: &str = "Stop Match";
+pub const QUICKMENU_TEXT_EXIT_APP: &str = "Exit";
 
 impl App {
     /// Renders a popup
@@ -41,7 +57,7 @@ impl App {
                 horizontal = Layout::horizontal([Constraint::Percentage(75)]).flex(Flex::Center);
             } else {
                 horizontal =
-                    Layout::horizontal([Constraint::Length(wanted_width + 4)]).flex(Flex::Center);
+                    Layout::horizontal([Constraint::Length(wanted_width + 6)]).flex(Flex::Center);
             }
         }
 
@@ -112,5 +128,73 @@ impl App {
             frame.render_widget(Clear, inner_layout[1]);
             frame.render_widget(Line::from(options), inner_layout[1]);
         }
+    }
+
+    /// Renders a quick context menu, if it is open
+    pub fn render_quickmenu_if_open(&mut self, frame: &mut Frame<'_>) {
+        let Some(state) = self.quickmenu_state else {
+            return;
+        };
+
+        let block = Block::bordered()
+            .title("Quickmenu")
+            .border_style(block_style())
+            .padding(Padding::new(2, 2, 1, 1));
+
+        let mut quickmenu_options = Vec::new();
+
+        for i in 0..QUICKMENU_OPTIONS_NUM {
+            match i {
+                QUICKMENU_OPTION_CLOSE_QUICKMENU => quickmenu_options.push(QUICKMENU_TEXT_CLOSE),
+                QUICKMENU_OPTION_RESTART_ROBOT => quickmenu_options.push(QUICKMENU_TEXT_RESTART),
+                QUICKMENU_OPTION_TOGGLE_MATCH => {
+                    // TODO: check if a match is active
+                    quickmenu_options.push(QUICKMENU_TEXT_START_MATCH);
+                }
+                QUICKMENU_OPTION_EXIT_APP => quickmenu_options.push(QUICKMENU_TEXT_EXIT_APP),
+                _ => {}
+            }
+        }
+
+        let mut items: Vec<ListItem> = Vec::new();
+
+        for i in 0..quickmenu_options.len() {
+            let option = quickmenu_options[i];
+
+            let selected = state.selected().unwrap_or_default() == i;
+
+            let style = if selected {
+                Style::new().fg(TEXT_COLOR).bg(SELECTED_BACKGROUND)
+            } else {
+                Style::new().fg(TEXT_COLOR)
+            };
+
+            items.push(ListItem::new(Span::styled(option, style)));
+        }
+
+        let lines_needed = quickmenu_options.len();
+        let mut columns_needed = 0;
+
+        for option in quickmenu_options.iter() {
+            if option.len() > columns_needed {
+                columns_needed = option.len();
+            }
+        }
+
+        let vertical =
+            Layout::vertical([Constraint::Length(lines_needed as u16 + 4)]).flex(Flex::Center);
+        let horizontal =
+            Layout::horizontal([Constraint::Length(columns_needed as u16 + 6)]).flex(Flex::Center);
+
+        // Build it properly
+        let [area] = vertical.areas(frame.area());
+        let [area] = horizontal.areas(area);
+
+        frame.render_widget(Clear, area);
+        frame.render_stateful_widget(
+            List::new(items).block(block),
+            area,
+            self.quickmenu_state.as_mut().unwrap(),
+        );
     }
 }

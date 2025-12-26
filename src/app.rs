@@ -79,6 +79,9 @@ pub struct App {
     /// A receiver to get popups from the network thread
     pub popup_receiver: async_channel::Receiver<Arc<Mutex<dyn Popup>>>,
 
+    /// If the quickmenu is active, it's list state
+    pub quickmenu_state: Option<ListState>,
+
     /// Handle of our gamepad input handler
     pub gilrs: AsyncGilrs,
 
@@ -131,6 +134,7 @@ impl App {
             mode: AppMode::Normal,
             current_command: String::with_capacity(32),
             active_popup: None,
+            quickmenu_state: None,
             popup_receiver,
         }
     }

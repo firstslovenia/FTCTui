@@ -1,17 +1,17 @@
 use ratatui::{
-    Frame,
     layout::{Constraint, Layout},
     style::Stylize,
     widgets::{Block, Clear, Padding, Paragraph},
+    Frame,
 };
-use styles::{TEXT_COLOR, block_style, selected_block_style};
+use styles::{block_style, selected_block_style, TEXT_COLOR};
 
 use crate::{
-    App,
     app::{
-        ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, AppMode, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID,
+        AppMode, ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID,
         ROBOT_BLOCK_ID, TELEOP_BLOCK_ID,
     },
+    App,
 };
 
 pub mod debug;
@@ -152,6 +152,7 @@ impl App {
         );
 
         self.render_popup_if_any(frame);
+        self.render_quickmenu_if_open(frame);
 
         // Render the vim-like command thingy
         if self.mode == AppMode::InsertCommand {
