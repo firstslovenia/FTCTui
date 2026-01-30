@@ -1,6 +1,6 @@
 [package]
 name = "ftctui"
-version = "0.1.2-public-alpha"
+version = "0.1.2-public-beta"
 edition = "2024"
 
 [dependencies]
