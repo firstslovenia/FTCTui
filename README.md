@@ -90,14 +90,16 @@ Pressing space at any point will stop or start the active opmode.
 
 | Hotkey                   | Use                                                           |
 |--------------------------|---------------------------------------------------------------|
+| q                        | Open quickmenu                                                |
+| r                        | Restart robot                                                 |
 | Tab / Right arrow        | Select next block                                             |
 | Shift + Tab / Left arrow | Select previous block                                         |
-| K / Up arrow             | Move selection up / Scroll up                                 |
-| J / Down arrow           | Move selection down / Scroll down                             |
+| k / Up arrow             | Move selection up / Scroll up                                 |
+| j / Down arrow           | Move selection down / Scroll down                             |
 | Enter                    | Activate selected (initialize / run / stop OpMode)            |
 | Space                    | Activate current OpMode (run if initialized, stop if running) |
 | Escape                   | Go back                                                       |
-| Q / Ctrl + C             | Quit                                                          |
+| Ctrl + c                 | Quit                                                          |
 | :                        | Open command bar                                              |
 
 ### Gamepads
