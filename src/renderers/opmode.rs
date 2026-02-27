@@ -117,7 +117,7 @@ impl App {
     }
 
     /// Creates the active opmode / telemetry paragraph
-    pub fn create_active_opmode_paragraph(&mut self) -> Paragraph {
+    pub fn create_active_opmode_paragraph(&mut self) -> Paragraph<'_> {
         let mut text: Vec<Line> = Vec::new();
 
         let robot = futures::executor::block_on(self.robot.read());

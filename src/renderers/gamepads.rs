@@ -8,7 +8,7 @@ use crate::{app::App, ftc_proto::gamepad_packet::ButtonFlags, renderers::styles:
 
 impl App {
     /// Creates the gamepads debug text
-    pub fn create_gamepads_paragraph(&mut self) -> Paragraph {
+    pub fn create_gamepads_paragraph(&mut self) -> Paragraph<'_> {
         let gamepads = vec![
             futures::executor::block_on(self.gamepad_one.read()).clone(),
             futures::executor::block_on(self.gamepad_two.read()).clone(),

@@ -13,7 +13,7 @@ use crate::{
 
 impl App {
     /// Creates the debug text
-    pub fn create_debug_paragraph(&mut self) -> Paragraph {
+    pub fn create_debug_paragraph(&mut self) -> Paragraph<'_> {
         let mut debug_text: Vec<Line> = Vec::new();
 
         let shared_network_read = futures::executor::block_on(self.shared_network_data.read());

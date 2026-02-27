@@ -680,7 +680,7 @@ dependencies = [
 
 [[package]]
 name = "ftctui"
-version = "0.1.1"
+version = "0.1.2-public-beta"
 dependencies = [
  "async-channel",
  "async-lock",

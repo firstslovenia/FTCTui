@@ -8,7 +8,7 @@ pub trait Popup: Send + Sync + std::fmt::Debug {
     fn title(&self) -> String;
 
     /// Returns the main text of the popup to show
-    fn text(&self) -> Paragraph;
+    fn text(&self) -> Paragraph<'_>;
 
     /// Returns the options the user can submit to the popup
     fn options(&self) -> Vec<String>;
@@ -42,7 +42,7 @@ impl<'a> Popup for InfoPopup<'a> {
         String::from("Alert (press enter to close)")
     }
 
-    fn text(&self) -> Paragraph {
+    fn text(&self) -> Paragraph<'_> {
         self.text.clone().scroll((self.scroll, 0))
     }
 
@@ -86,7 +86,7 @@ impl Popup for RestartRobotPopup {
         String::from("Restart Robot?")
     }
 
-    fn text(&self) -> Paragraph {
+    fn text(&self) -> Paragraph<'_> {
         Paragraph::new("Are you sure you want to restart the robot?")
     }
 
