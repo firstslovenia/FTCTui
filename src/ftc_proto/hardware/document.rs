@@ -3,18 +3,19 @@
 use std::io::Cursor;
 
 use crate::ftc_proto::hardware::{
+    FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag,
     device::{DeviceFlavor, HardwareDeviceType},
     lynx::{LynxModule, LynxUSBDevice, ServoHub},
     robot::{ConfigurationDevice, EthernetOverUsbConfiguration, Robot, Webcam},
-    FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag,
 };
 
 use xml::{
+    EmitterConfig, EventWriter,
     attribute::OwnedAttribute,
     common::XmlVersion,
     namespace::Namespace,
     reader::{EventReader, XmlEvent},
-    writer, EmitterConfig, EventWriter,
+    writer,
 };
 
 /// Tries to parse an xml robot configuration
@@ -204,9 +205,10 @@ pub fn try_parse_xml_document(
                                                         .push(device);
                                                 }
                                                 _ => {
-                                                    println!(
+                                                    log::error!(
                                                         "Unhandled flavor {:?} - (tag {})",
-                                                        device.device_type, device.xml_tag_name
+                                                        device.device_type,
+                                                        device.xml_tag_name
                                                     );
                                                 }
                                             }
@@ -296,45 +298,6 @@ pub fn write_xml_document(robot: &Robot) -> Option<String> {
         });
 
         events.push(robot.opening_event());
-
-        let webcam_attributes;
-
-        if let Some(webcam) = &robot.webcam {
-            webcam_attributes = webcam.make_owned_attributes();
-
-            events.push(writer::XmlEvent::StartElement {
-                name: "Webcam".into(),
-                attributes: std::borrow::Cow::Owned(
-                    webcam_attributes.iter().map(|x| x.borrow()).collect(),
-                ),
-                namespace: std::borrow::Cow::Owned(Namespace::empty()),
-            });
-
-            events.push(writer::XmlEvent::EndElement {
-                name: Some("Webcam".into()),
-            });
-        }
-
-        let ethernet_over_usb_attributes;
-
-        if let Some(ethernet_over_usb) = &robot.ethernet_over_usb_device {
-            ethernet_over_usb_attributes = ethernet_over_usb.make_owned_attributes();
-
-            events.push(writer::XmlEvent::StartElement {
-                name: "EthernetOverUsbConfiguration".into(),
-                attributes: std::borrow::Cow::Owned(
-                    ethernet_over_usb_attributes
-                        .iter()
-                        .map(|x| x.borrow())
-                        .collect(),
-                ),
-                namespace: std::borrow::Cow::Owned(Namespace::empty()),
-            });
-
-            events.push(writer::XmlEvent::EndElement {
-                name: Some("EthernetOverUsbConfiguration".into()),
-            });
-        }
 
         let lynx_usb_device = robot.lynx_usb_device.as_ref().unwrap();
         let lynx_usb_device_attributes = lynx_usb_device.make_owned_attributes();
@@ -458,6 +421,46 @@ pub fn write_xml_document(robot: &Robot) -> Option<String> {
         events.push(writer::XmlEvent::EndElement {
             name: Some("LynxUsbDevice".into()),
         });
+
+        let webcam_attributes;
+
+        if let Some(webcam) = &robot.webcam {
+            webcam_attributes = webcam.make_owned_attributes();
+
+            events.push(writer::XmlEvent::StartElement {
+                name: "Webcam".into(),
+                attributes: std::borrow::Cow::Owned(
+                    webcam_attributes.iter().map(|x| x.borrow()).collect(),
+                ),
+                namespace: std::borrow::Cow::Owned(Namespace::empty()),
+            });
+
+            events.push(writer::XmlEvent::EndElement {
+                name: Some("Webcam".into()),
+            });
+        }
+
+        let ethernet_over_usb_attributes;
+
+        if let Some(ethernet_over_usb) = &robot.ethernet_over_usb_device {
+            ethernet_over_usb_attributes = ethernet_over_usb.make_owned_attributes();
+
+            events.push(writer::XmlEvent::StartElement {
+                name: "EthernetOverUsbConfiguration".into(),
+                attributes: std::borrow::Cow::Owned(
+                    ethernet_over_usb_attributes
+                        .iter()
+                        .map(|x| x.borrow())
+                        .collect(),
+                ),
+                namespace: std::borrow::Cow::Owned(Namespace::empty()),
+            });
+
+            events.push(writer::XmlEvent::EndElement {
+                name: Some("EthernetOverUsbConfiguration".into()),
+            });
+        }
+
         events.push(robot.closing_event());
 
         write_xml_events(&mut writer, events)?;

@@ -782,6 +782,13 @@ impl NetworkHandler {
                             types.len()
                         );
 
+                        let _ = tokio::fs::write(
+                            "configuration-device-types.json",
+                            format!("{:?}", types),
+                        )
+                        .await
+                        .unwrap();
+
                         let mut write_lock = self.robot.write().await;
 
                         write_lock.configuration_types = Some(types);
@@ -834,6 +841,8 @@ impl NetworkHandler {
                 log::info!("Received robot detailed configuration");
                 log::trace!("{}", packet.data);
 
+                let _ = tokio::fs::write("robot-configuration.xml", &packet.data).await;
+
                 let read_lock = self.robot.read().await;
 
                 if let Some(types) = &read_lock.configuration_types {
@@ -842,6 +851,9 @@ impl NetworkHandler {
                     log::info!("Robot config: {:?}", types);
 
                     let re_written = write_xml_document(&robot).unwrap();
+
+                    let _ =
+                        tokio::fs::write("robot-configuration-recreated.xml", &re_written).await;
 
                     log::info!("Re-written to xml: {}", re_written);
                 } else {

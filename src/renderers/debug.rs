@@ -6,8 +6,8 @@ use ratatui::{
 
 use crate::{
     app::App,
-    network::NetworkStatus,
     r#match::Match,
+    network::NetworkStatus,
     renderers::styles::{ERROR_COLOR, MUTED_TEXT_COLOR, SUCCESS_COLOR, TEXT_COLOR, WARNING_COLOR},
 };
 

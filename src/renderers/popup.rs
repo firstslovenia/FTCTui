@@ -1,14 +1,14 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Flex, Layout},
     style::Style,
     text::{Line, Span},
     widgets::{Block, Clear, List, ListItem, Padding},
-    Frame,
 };
 
 use crate::{
     app::App,
-    renderers::styles::{block_style, MUTED_TEXT_COLOR, SELECTED_BACKGROUND, TEXT_COLOR},
+    renderers::styles::{MUTED_TEXT_COLOR, SELECTED_BACKGROUND, TEXT_COLOR, block_style},
 };
 
 // Indexes of each quickmenu option

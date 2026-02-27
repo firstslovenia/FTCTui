@@ -50,9 +50,9 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     skip_tty_check: bool,
 
-    /// If provided, runs the experimental configuration test (instead of the actual program)
-    #[arg(long, default_value_t = false)]
-    experimental_configuration_things: bool,
+    /// If provided, runs the experimental configuration test with the given configuration xml (instead of the actual program)
+    #[arg(long, default_value_t = String::new())]
+    experimental_configuration_path: String,
 }
 
 #[tokio::main]
@@ -60,7 +60,7 @@ async fn main() -> color_eyre::Result<()> {
     let args = Args::parse();
 
     if let Some(level) = args.log_level.clone()
-        && !args.experimental_configuration_things
+        && args.experimental_configuration_path.is_empty()
     {
         let level_filter = match level.to_lowercase().as_str() {
             "error" => LevelFilter::Error,
@@ -83,7 +83,7 @@ async fn main() -> color_eyre::Result<()> {
         .unwrap();
     }
 
-    if args.experimental_configuration_things {
+    if !args.experimental_configuration_path.is_empty() {
         CombinedLogger::init(vec![
             WriteLogger::new(
                 LevelFilter::Trace,
@@ -99,34 +99,21 @@ async fn main() -> color_eyre::Result<()> {
         ])
         .unwrap();
 
+        let configuration_path = args.experimental_configuration_path;
+
+        log::info!("Testing with {:?}..", configuration_path);
+
+        let file = std::fs::read_to_string(configuration_path).expect("Failed to read file!");
+
         let robot_config = crate::robot::Robot::new_fake().configuration_types.unwrap();
 
-        let original = r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
-<Robot>
-    <LynxUsbDevice name="Control Hub Portal" serialNumber="(embedded)" parentModuleAddress="173">
-        <LynxModule name="Control Hub" port="173">
-            <RevRoboticsUltraplanetaryHDHexMotor name="leftForward" port="0" />
-            <RevRoboticsUltraplanetaryHDHexMotor name="frontSideways" port="1" />
-            <RevRoboticsUltraplanetaryHDHexMotor name="rightForward" port="2" />
-            <RevRoboticsUltraplanetaryHDHexMotor name="backSideways" port="3" />
-            <ControlHubImuBHI260AP name="imu" port="0" bus="0" />
-            <ModernRoboticsI2cCompassSensor name="Compass" port="1" bus="0" />
-        </LynxModule>
-        <LynxModule name="Expansion Hub 2" port="2">
-            <RevRoboticsUltraplanetaryHDHexMotor name="lifter1" port="0" />
-            <RevRoboticsUltraplanetaryHDHexMotor name="lifter2" port="1" />
-        </LynxModule>
-    </LynxUsbDevice>
-</Robot>
-"#;
-
         let start = std::time::Instant::now();
-        let a = try_parse_xml_document(original.to_string(), &robot_config).unwrap();
+        let a = try_parse_xml_document(file.clone(), &robot_config).unwrap();
         let parsed = std::time::Instant::now();
 
         let took_parse = parsed - start;
 
-        log::info!("{}", original);
+        log::info!("{}", file);
 
         log::info!("{:?}", a);
 

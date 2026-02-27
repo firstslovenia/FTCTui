@@ -13,8 +13,8 @@ use crate::{
         get_timestamp_millis,
     },
     ftc_proto::{
-        gamepad_packet::{ButtonFlags, GamepadPacketData},
         command_packet::OPMODE_STOP,
+        gamepad_packet::{ButtonFlags, GamepadPacketData},
         time_packet::RobotOpmodeState,
     },
     r#match::Match,
@@ -61,10 +61,10 @@ impl App {
 
             // Open quickmenu
             (_, KeyCode::Char('q')) => {
-					 let mut state = ListState::default();
+                let mut state = ListState::default();
 
-					 // Bandaid fix for having to press twice to move down for the first time
-					 state.select_next();
+                // Bandaid fix for having to press twice to move down for the first time
+                state.select_next();
 
                 self.quickmenu_state = Some(state);
             }

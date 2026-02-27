@@ -10,9 +10,9 @@ use xml::{
 };
 
 use crate::ftc_proto::hardware::{
+    FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag, MakeXMLTagAttributes,
     device::{DeviceFlavor, HardwareDeviceType},
     lynx::LynxUSBDevice,
-    FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag, MakeXMLTagAttributes,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,21 +141,23 @@ pub struct Webcam {
 
     /// False by default
     #[serde(default)]
-    pub auto_open: bool,
+    pub auto_open: Option<bool>,
 }
 
 impl MakeOwnedXMLTagAttributes for Webcam {
     fn make_owned_attributes(&self) -> Vec<xml::attribute::OwnedAttribute> {
         let mut attributes = self.controller_meta.make_owned_attributes();
 
-        attributes.push(OwnedAttribute {
-            name: OwnedName {
-                local_name: "autoOpen".to_string(),
-                namespace: None,
-                prefix: None,
-            },
-            value: self.auto_open.to_string(),
-        });
+        if let Some(auto_open) = self.auto_open {
+            attributes.push(OwnedAttribute {
+                name: OwnedName {
+                    local_name: "autoOpen".to_string(),
+                    namespace: None,
+                    prefix: None,
+                },
+                value: auto_open.to_string(),
+            });
+        }
 
         attributes
     }
@@ -179,12 +181,12 @@ impl FromXMLTag for Webcam {
                     return None;
                 }
 
-                let mut auto_open = false;
+                let mut auto_open = None;
 
                 for attr in attributes {
                     if attr.name.to_string().as_str() == "autoOpen" {
-                        match attr.value.parse() {
-                            Ok(b) => auto_open = b,
+                        match attr.value.parse::<bool>() {
+                            Ok(b) => auto_open = Some(b),
                             Err(e) => {
                                 log::error!(
                                     "Failed to parse autoOpen as bool: {} ({})",

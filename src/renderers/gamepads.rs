@@ -1,10 +1,14 @@
 use ratatui::{
-	style::Style,
+    style::Style,
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
 };
 
-use crate::{app::App, ftc_proto::gamepad_packet::ButtonFlags, renderers::styles::{MUTED_TEXT_COLOR, SUCCESS_COLOR, TEXT_COLOR}};
+use crate::{
+    app::App,
+    ftc_proto::gamepad_packet::ButtonFlags,
+    renderers::styles::{MUTED_TEXT_COLOR, SUCCESS_COLOR, TEXT_COLOR},
+};
 
 impl App {
     /// Creates the gamepads debug text

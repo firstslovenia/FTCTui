@@ -1,17 +1,17 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Layout},
     style::Stylize,
     widgets::{Block, Clear, Padding, Paragraph},
-    Frame,
 };
-use styles::{block_style, selected_block_style, TEXT_COLOR};
+use styles::{TEXT_COLOR, block_style, selected_block_style};
 
 use crate::{
+    App,
     app::{
-        AppMode, ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID,
+        ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, AppMode, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID,
         ROBOT_BLOCK_ID, TELEOP_BLOCK_ID,
     },
-    App,
 };
 
 pub mod debug;
