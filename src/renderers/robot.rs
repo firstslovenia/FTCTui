@@ -15,7 +15,7 @@ use crate::{
 
 impl App {
     /// Creates the robot text
-    pub fn create_robot_paragraph(&mut self) -> Paragraph {
+    pub fn create_robot_paragraph(&mut self) -> Paragraph<'_> {
         let mut robot_text: Vec<Line> = Vec::new();
 
         let robot = futures::executor::block_on(self.robot.read());
