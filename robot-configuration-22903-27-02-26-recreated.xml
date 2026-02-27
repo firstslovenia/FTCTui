@@ -1,0 +1,24 @@
+<Robot>
+  <LynxUsbDevice name="Control Hub Portal" serialNumber="(embedded)" parentModuleAddress="173">
+    <LynxModule name="Control Hub" port="173">
+      <goBILDA5202SeriesMotor name="frontLeft" port="0" />
+      <RevRobotics20HDHexMotor name="rearLeft" port="1" />
+      <goBILDA5202SeriesMotor name="frontRight" port="2" />
+      <goBILDA5202SeriesMotor name="rearRight" port="3" />
+      <goBILDAPinpoint name="pinpoint" port="1" bus="1" />
+      <LynxEmbeddedIMU name="imu" port="2" bus="0" />
+      <REV_VL53L0X_RANGE_SENSOR name="distance" port="0" bus="2" />
+    </LynxModule>
+    <LynxModule name="Expansion Hub 1" port="1">
+      <RevRoboticsUltraplanetaryHDHexMotor name="magazine" port="0" />
+      <RevRoboticsUltraplanetaryHDHexMotor name="intake" port="1" />
+      <RevRoboticsUltraplanetaryHDHexMotor name="shooter" port="2" />
+      <Servo name="helpServo" port="0" />
+      <AnalogInput name="potentiometer" port="0" />
+      <RevColorSensorV3 name="colorAlt" port="0" bus="0" />
+      <RevTouchSensor name="outtakeSensor" port="0" />
+      <RevTouchSensor name="intakeSensor" port="2" />
+    </LynxModule>
+  </LynxUsbDevice>
+  <Webcam name="webcam" serialNumber="0164F02F" />
+</Robot>

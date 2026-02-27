@@ -194,6 +194,15 @@ pub fn try_parse_xml_document(
                                                         .analog_inputs
                                                         .push(device);
                                                 }
+                                                DeviceFlavor::DigitalIO => {
+                                                    robot
+                                                        .lynx_usb_device
+                                                        .as_mut()
+                                                        .unwrap()
+                                                        .lynx_modules[lynx_module_index]
+                                                        .digital_devices
+                                                        .push(device);
+                                                }
                                                 // ?? maybe
                                                 DeviceFlavor::AnalogOutput => {
                                                     robot

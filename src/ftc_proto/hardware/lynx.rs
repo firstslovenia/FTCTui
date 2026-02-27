@@ -102,12 +102,12 @@ impl LynxModule {
     /// Leaves the devices in self empty
     pub fn all_devices(&mut self) -> Vec<ConfigurationDevice> {
         let mut devices = Vec::new();
-        devices.append(&mut self.servos);
         devices.append(&mut self.motors);
-        devices.append(&mut self.i2c_devices);
-        devices.append(&mut self.digital_devices);
-        devices.append(&mut self.pwm_outputs);
+        devices.append(&mut self.servos);
         devices.append(&mut self.analog_inputs);
+        devices.append(&mut self.digital_devices);
+        devices.append(&mut self.i2c_devices);
+        devices.append(&mut self.pwm_outputs);
         return devices;
     }
 }
