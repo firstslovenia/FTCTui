@@ -10,9 +10,9 @@ use xml::{
 };
 
 use crate::ftc_proto::hardware::{
-    FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag, MakeXMLTagAttributes,
     device::{DeviceFlavor, HardwareDeviceType},
     lynx::LynxUSBDevice,
+    FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag, MakeXMLTagAttributes,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,7 +62,7 @@ pub struct Robot {
 }
 
 impl MakeXMLTagAttributes for Robot {
-    fn make_attributes(&self) -> Vec<Attribute> {
+    fn make_attributes(&self) -> Vec<Attribute<'_>> {
         let mut attributes = Vec::new();
 
         if let Some(r#type) = &self.r#type {
@@ -77,7 +77,7 @@ impl MakeXMLTagAttributes for Robot {
 }
 
 impl MakeXMLTag for Robot {
-    fn opening_event(&self) -> xml::writer::XmlEvent {
+    fn opening_event(&self) -> xml::writer::XmlEvent<'_> {
         let attributes = self.make_attributes();
 
         xml::writer::XmlEvent::StartElement {
@@ -87,7 +87,7 @@ impl MakeXMLTag for Robot {
         }
     }
 
-    fn closing_event(&self) -> xml::writer::XmlEvent {
+    fn closing_event(&self) -> xml::writer::XmlEvent<'_> {
         xml::writer::XmlEvent::EndElement {
             name: Some("Robot".into()),
         }
@@ -140,6 +140,7 @@ pub struct Webcam {
     pub controller_meta: ConfigurationController,
 
     /// False by default
+    #[serde(default)]
     pub auto_open: bool,
 }
 
@@ -290,9 +291,16 @@ impl FromXMLTag for EthernetOverUsbConfiguration {
 pub struct ConfigurationDevice {
     /// Always set when deserializing, needs to be set when serializing
     pub xml_tag_name: String,
+
+    #[serde(default)]
     pub name: Option<String>,
+
+    #[serde(default)]
     pub port: Option<u32>,
+
+    #[serde(default)]
     pub bus: Option<u32>,
+
     /// Not actually de/serialized, but useful to save
     pub device_type: DeviceFlavor,
 }
@@ -391,6 +399,8 @@ impl ConfigurationDevice {
 /// Generic data for almost every device which can have child devices
 pub struct ConfigurationController {
     pub device_meta: ConfigurationDevice,
+
+    #[serde(default)]
     pub serial_number: Option<String>,
 }
 

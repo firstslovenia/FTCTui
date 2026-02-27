@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{self, Event, KeyEventKind},
-    widgets::ListState,
+    widgets::{ListState, Paragraph},
 };
 use tokio::net::UdpSocket;
 
@@ -23,7 +23,7 @@ use crate::{
     input::Gamepad,
     r#match::{Match, MatchSFXHandler},
     network::{NetworkStatus, SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
-    popup::Popup,
+    popup::{InfoPopup, Popup},
     robot::Robot,
 };
 
@@ -128,6 +128,13 @@ impl App {
 
         let match_sender = MatchSFXHandler::spawn().await;
 
+        let experimental_version_popup = Arc::new(Mutex::new(InfoPopup {
+            text: Paragraph::new(
+                "Please note that this is an experimental version of FtcTUI. You may experience issues or even crashes.",
+            ),
+            scroll: 0,
+        }));
+
         App {
             socket,
             shared_network_data: network_debug_data,
@@ -142,7 +149,7 @@ impl App {
             gamepad_two,
             mode: AppMode::Normal,
             current_command: String::with_capacity(32),
-            active_popup: None,
+            active_popup: Some(experimental_version_popup),
             quickmenu_state: None,
             active_match: None,
             match_sender: match_sender,

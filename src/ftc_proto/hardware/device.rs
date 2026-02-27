@@ -33,7 +33,10 @@ pub struct HardwareDeviceType {
     pub xml_tag_aliases: Vec<String>,
 
     // Class source and control system and not really needed
+    #[serde(default)]
     pub motor_extras: Option<MotorDeviceExtraFields>,
+
+    #[serde(default)]
     pub servo_extras: Option<ServoDeviceExtraFields>,
 }
 

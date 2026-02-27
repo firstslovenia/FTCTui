@@ -3,14 +3,18 @@
 use std::io::Cursor;
 
 use crate::ftc_proto::hardware::{
-    FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag,
     device::{DeviceFlavor, HardwareDeviceType},
     lynx::{LynxModule, LynxUSBDevice, ServoHub},
     robot::{ConfigurationDevice, EthernetOverUsbConfiguration, Robot, Webcam},
+    FromXMLTag, MakeOwnedXMLTagAttributes, MakeXMLTag,
 };
 
 use xml::{
-    common::XmlVersion, namespace::Namespace, reader::{EventReader, XmlEvent}, writer, EmitterConfig, EventWriter
+    attribute::OwnedAttribute,
+    common::XmlVersion,
+    namespace::Namespace,
+    reader::{EventReader, XmlEvent},
+    writer, EmitterConfig, EventWriter,
 };
 
 /// Tries to parse an xml robot configuration
@@ -346,85 +350,107 @@ pub fn write_xml_document(robot: &Robot) -> Option<String> {
             namespace: std::borrow::Cow::Owned(Namespace::empty()),
         });
 
-		  write_xml_events(&mut writer, events)?;
+        write_xml_events(&mut writer, events)?;
 
-        // This is a Vec<Vec<OwnedAttribute>>
-        let mut lynx_module_attributes = Vec::new();
+        let mut lynx_module_attributes: Vec<Vec<OwnedAttribute>> = Vec::new();
 
         for module in lynx_usb_device.lynx_modules.iter() {
             lynx_module_attributes.push(module.make_owned_attributes());
         }
 
         for (i, module) in lynx_usb_device.lynx_modules.iter().enumerate() {
-            write_xml_event(&mut writer, writer::XmlEvent::StartElement {
-                name: "LynxModule".into(),
-                attributes: std::borrow::Cow::Owned(
-                    lynx_module_attributes[i]
-                        .iter()
-                        .map(|x| x.borrow())
-                        .collect(),
-                ),
-                namespace: std::borrow::Cow::Owned(Namespace::empty()),
-            })?;
+            write_xml_event(
+                &mut writer,
+                writer::XmlEvent::StartElement {
+                    name: "LynxModule".into(),
+                    attributes: std::borrow::Cow::Owned(
+                        lynx_module_attributes[i]
+                            .iter()
+                            .map(|x| x.borrow())
+                            .collect(),
+                    ),
+                    namespace: std::borrow::Cow::Owned(Namespace::empty()),
+                },
+            )?;
 
             let lynx_devices = module.clone().all_devices();
 
             for device in lynx_devices {
                 let attributes = device.make_owned_attributes();
 
-                write_xml_event(&mut writer, writer::XmlEvent::StartElement {
-                    name: device.xml_tag_name.as_str().into(),
-                    attributes: std::borrow::Cow::Owned(
-                        attributes.iter().map(|x| x.borrow()).collect(),
-                    ),
-                    namespace: std::borrow::Cow::Owned(Namespace::empty()),
-                })?;
+                write_xml_event(
+                    &mut writer,
+                    writer::XmlEvent::StartElement {
+                        name: device.xml_tag_name.as_str().into(),
+                        attributes: std::borrow::Cow::Owned(
+                            attributes.iter().map(|x| x.borrow()).collect(),
+                        ),
+                        namespace: std::borrow::Cow::Owned(Namespace::empty()),
+                    },
+                )?;
 
-                write_xml_event(&mut writer, writer::XmlEvent::EndElement {
-                    name: Some(device.xml_tag_name.as_str().into()),
-                })?;
+                write_xml_event(
+                    &mut writer,
+                    writer::XmlEvent::EndElement {
+                        name: Some(device.xml_tag_name.as_str().into()),
+                    },
+                )?;
             }
 
-            write_xml_event(&mut writer, writer::XmlEvent::EndElement {
-                name: Some("LynxModule".into()),
-            })?;
+            write_xml_event(
+                &mut writer,
+                writer::XmlEvent::EndElement {
+                    name: Some("LynxModule".into()),
+                },
+            )?;
         }
 
-        // This is a Vec<Vec<OwnedAttribute>>
-        let mut servo_hub_attributes = Vec::new();
+        let mut servo_hub_attributes: Vec<Vec<OwnedAttribute>> = Vec::new();
 
-        for hub in lynx_usb_device.servo_hubs.iter() {
-            servo_hub_attributes.push(hub.make_owned_attributes());
+        for servo_hub in lynx_usb_device.servo_hubs.iter() {
+            servo_hub_attributes.push(servo_hub.make_owned_attributes());
         }
 
         for (i, module) in lynx_usb_device.servo_hubs.iter().enumerate() {
-            write_xml_event(&mut writer, writer::XmlEvent::StartElement {
-                name: "ServoHub".into(),
-                attributes: std::borrow::Cow::Owned(
-                    servo_hub_attributes[i].iter().map(|x| x.borrow()).collect(),
-                ),
-                namespace: std::borrow::Cow::Owned(Namespace::empty()),
-            })?;
+            write_xml_event(
+                &mut writer,
+                writer::XmlEvent::StartElement {
+                    name: "ServoHub".into(),
+                    attributes: std::borrow::Cow::Owned(
+                        servo_hub_attributes[i].iter().map(|x| x.borrow()).collect(),
+                    ),
+                    namespace: std::borrow::Cow::Owned(Namespace::empty()),
+                },
+            )?;
 
             for servo in &module.servos {
                 let attributes = servo.make_owned_attributes();
 
-                write_xml_event(&mut writer, writer::XmlEvent::StartElement {
-                    name: servo.xml_tag_name.as_str().into(),
-                    attributes: std::borrow::Cow::Owned(
-                        attributes.iter().map(|x| x.borrow()).collect(),
-                    ),
-                    namespace: std::borrow::Cow::Owned(Namespace::empty()),
-                })?;
+                write_xml_event(
+                    &mut writer,
+                    writer::XmlEvent::StartElement {
+                        name: servo.xml_tag_name.as_str().into(),
+                        attributes: std::borrow::Cow::Owned(
+                            attributes.iter().map(|x| x.borrow()).collect(),
+                        ),
+                        namespace: std::borrow::Cow::Owned(Namespace::empty()),
+                    },
+                )?;
 
-                write_xml_event(&mut writer, writer::XmlEvent::EndElement {
-                    name: Some(servo.xml_tag_name.as_str().into()),
-                })?;
+                write_xml_event(
+                    &mut writer,
+                    writer::XmlEvent::EndElement {
+                        name: Some(servo.xml_tag_name.as_str().into()),
+                    },
+                )?;
             }
 
-            write_xml_event(&mut writer, writer::XmlEvent::EndElement {
-                name: Some("ServoHub".into()),
-            })?;
+            write_xml_event(
+                &mut writer,
+                writer::XmlEvent::EndElement {
+                    name: Some("ServoHub".into()),
+                },
+            )?;
         }
 
         events = Vec::new();
@@ -434,34 +460,40 @@ pub fn write_xml_document(robot: &Robot) -> Option<String> {
         });
         events.push(robot.closing_event());
 
-		  write_xml_events(&mut writer, events)?;
+        write_xml_events(&mut writer, events)?;
 
         return Some(output);
     }
 }
 
 /// Helper function to reduce boilerplate in our main XML writer function
-fn write_xml_event(writer: &mut EventWriter<Cursor<&mut Vec<u8>>>, event: xml::writer::XmlEvent) -> Option<()> {
-	match writer.write(event) {
-		Ok(_) => Some(()),
-		Err(e) => {
-         log::error!("Write error: {e}");
-			None
-		}
-	}
+fn write_xml_event(
+    writer: &mut EventWriter<Cursor<&mut Vec<u8>>>,
+    event: xml::writer::XmlEvent,
+) -> Option<()> {
+    match writer.write(event) {
+        Ok(_) => Some(()),
+        Err(e) => {
+            log::error!("Write error: {e}");
+            None
+        }
+    }
 }
 
 /// Helper function to reduce boilerplate in our main XML writer function
-fn write_xml_events(writer: &mut EventWriter<Cursor<&mut Vec<u8>>>, events: Vec<xml::writer::XmlEvent>) -> Option<()> {
-	for event in events {
-match writer.write(event) {
-		Ok(_) => {},
-		Err(e) => {
-         log::error!("Write error: {e}");
-			return None;
-		}
-	}
-	}
+fn write_xml_events(
+    writer: &mut EventWriter<Cursor<&mut Vec<u8>>>,
+    events: Vec<xml::writer::XmlEvent>,
+) -> Option<()> {
+    for event in events {
+        match writer.write(event) {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Write error: {e}");
+                return None;
+            }
+        }
+    }
 
-	Some(())
+    Some(())
 }

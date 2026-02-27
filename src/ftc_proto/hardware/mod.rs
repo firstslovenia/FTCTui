@@ -12,19 +12,19 @@ pub mod robot;
 /// Trait for objects that can be written as XML tags
 pub trait MakeXMLTag {
     /// Returns an event to open the tag
-    fn opening_event(&self) -> xml::writer::XmlEvent;
+    fn opening_event(&self) -> xml::writer::XmlEvent<'_>;
 
     /// Returns an event to close the tag
     ///
     /// Technically this doesn't need to be specific for an event, but it
     /// reduces potential problems to have it
-    fn closing_event(&self) -> xml::writer::XmlEvent;
+    fn closing_event(&self) -> xml::writer::XmlEvent<'_>;
 }
 
 /// Trait for objects that have values that are expressed as XML Attributes
 pub trait MakeXMLTagAttributes {
     /// Returns a list of attributes that exist within self
-    fn make_attributes(&self) -> Vec<Attribute>;
+    fn make_attributes(&self) -> Vec<Attribute<'_>>;
 }
 
 /// Trait for objects that have values that are expressed as owned XML Attributes
