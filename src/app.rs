@@ -21,6 +21,7 @@ use crate::{
     },
     gamepad_map::{self, AsyncGilrs, REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX},
     input::Gamepad,
+    r#match::{Match, MatchSFXHandler},
     network::{NetworkStatus, SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
     popup::Popup,
     robot::Robot,
@@ -79,6 +80,15 @@ pub struct App {
     /// A receiver to get popups from the network thread
     pub popup_receiver: async_channel::Receiver<Arc<Mutex<dyn Popup>>>,
 
+    /// If the quickmenu is active, it's list state
+    pub quickmenu_state: Option<ListState>,
+
+    /// Current active Match, if any
+    pub active_match: Option<Match>,
+
+    /// Broadcast to send the match handler a start / stop for matches
+    pub match_sender: tokio::sync::broadcast::Sender<Option<Match>>,
+
     /// Handle of our gamepad input handler
     pub gilrs: AsyncGilrs,
 
@@ -116,6 +126,8 @@ impl App {
 
         let gilrs = Self::create_gilrs();
 
+        let match_sender = MatchSFXHandler::spawn().await;
+
         App {
             socket,
             shared_network_data: network_debug_data,
@@ -131,6 +143,9 @@ impl App {
             mode: AppMode::Normal,
             current_command: String::with_capacity(32),
             active_popup: None,
+            quickmenu_state: None,
+            active_match: None,
+            match_sender: match_sender,
             popup_receiver,
         }
     }

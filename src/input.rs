@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use async_lock::Mutex;
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::{
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    widgets::ListState,
+};
 
 use crate::{
     App,
@@ -14,7 +17,12 @@ use crate::{
         command_packet::OPMODE_STOP,
         time_packet::RobotOpmodeState,
     },
+    r#match::Match,
     popup::RestartRobotPopup,
+    renderers::popup::{
+        QUICKMENU_OPTION_CLOSE_QUICKMENU, QUICKMENU_OPTION_EXIT_APP,
+        QUICKMENU_OPTION_RESTART_ROBOT, QUICKMENU_OPTION_TOGGLE_MATCH,
+    },
 };
 
 use gilrs::{Axis, Button, GamepadId, Gilrs, MappingSource};
@@ -35,7 +43,7 @@ impl App {
         // Universal, always active key handlers
         match (key.modifiers, key.code) {
             // Quit handler
-            (_, KeyCode::Char('q'))
+            (_, KeyCode::Esc)
             | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit().await,
 
             // Restart handler
@@ -51,7 +59,63 @@ impl App {
                 self.current_command.clear();
             }
 
+            // Open quickmenu
+            (_, KeyCode::Char('q')) => {
+					 let mut state = ListState::default();
+
+					 // Bandaid fix for having to press twice to move down for the first time
+					 state.select_next();
+
+                self.quickmenu_state = Some(state);
+            }
+
             _ => {}
+        }
+
+        // Quickmenu key handlers
+        if let Some(quickmenu_state) = self.quickmenu_state.as_mut() {
+            match (key.modifiers, key.code) {
+                // Submit
+                (_, KeyCode::Enter) => {
+                    match quickmenu_state.selected().unwrap_or_default() {
+                        QUICKMENU_OPTION_CLOSE_QUICKMENU => {}
+                        QUICKMENU_OPTION_RESTART_ROBOT => {
+                            self.active_popup = Some(Arc::new(Mutex::new(RestartRobotPopup {
+                                selected_yes: false,
+                            })))
+                        }
+                        QUICKMENU_OPTION_TOGGLE_MATCH => {
+                            if self.active_match.is_some() {
+                                let _ = self.match_sender.send(None);
+                                self.active_match = None;
+                            } else {
+                                let m = Match::new();
+                                let _ = self.match_sender.send(Some(m.clone()));
+                                self.active_match = Some(m);
+                            }
+                        }
+                        QUICKMENU_OPTION_EXIT_APP => {
+                            self.quit().await;
+                        }
+                        _ => {}
+                    }
+
+                    self.quickmenu_state = None;
+                }
+
+                // Move selected option forwards and backwards
+                (_, KeyCode::BackTab) | (_, KeyCode::Up) | (_, KeyCode::Char('k')) => {
+                    quickmenu_state.select_previous();
+                }
+
+                (_, KeyCode::Tab) | (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
+                    quickmenu_state.select_next();
+                }
+
+                _ => {}
+            }
+
+            return;
         }
 
         // Popup key handlers
@@ -116,7 +180,7 @@ impl App {
             },
 
             // Stop / start button
-            (_, KeyCode::Char(' ')) => {
+            (KeyModifiers::NONE, KeyCode::Char(' ')) => {
                 let robot = self.robot.read().await;
 
                 if let Some(opmode_state) = &robot.active_opmode_state {
