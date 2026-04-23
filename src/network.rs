@@ -843,19 +843,21 @@ impl NetworkHandler {
 
                 let _ = tokio::fs::write("robot-configuration.xml", &packet.data).await;
 
-                let read_lock = self.robot.read().await;
+                let mut write_lock = self.robot.write().await;
 
-                if let Some(types) = &read_lock.configuration_types {
-                    let robot = try_parse_xml_document(packet.data, types).unwrap();
+                if let Some(types) = &write_lock.configuration_types {
+                    let xml_configuration = try_parse_xml_document(packet.data, types).unwrap();
 
                     log::info!("Robot config: {:?}", types);
 
-                    let re_written = write_xml_document(&robot).unwrap();
+                    let re_written = write_xml_document(&xml_configuration).unwrap();
 
                     let _ =
                         tokio::fs::write("robot-configuration-recreated.xml", &re_written).await;
 
                     log::info!("Re-written to xml: {}", re_written);
+
+                    write_lock.active_configuration_data = Some(xml_configuration);
                 } else {
                     log::warn!("We haven't received our configuration types yet..");
                 }

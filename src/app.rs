@@ -80,7 +80,7 @@ pub struct App {
     /// A receiver to get popups from the network thread
     pub popup_receiver: async_channel::Receiver<Arc<Mutex<dyn Popup>>>,
 
-    /// If the quickmenu is active, it's list state
+    /// If the quickmenu is active, its list state
     pub quickmenu_state: Option<ListState>,
 
     /// Current active Match, if any

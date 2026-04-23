@@ -26,7 +26,7 @@ pub mod test_deserializer {
         let mut success: usize = 0;
         let mut i: usize = 0;
 
-        let mut binary = tokio::fs::read("secret path to .bin file").await.unwrap();
+        let mut binary = tokio::fs::read("top_secret_path").await.unwrap();
 
         let started = tokio::time::Instant::now();
 
@@ -73,7 +73,13 @@ pub mod test_deserializer {
                                 }
                                 Some(p) => {
                                     success += 1;
-                                    //println!("{} - Command", success);
+
+                                    if !p.acknowledged {
+                                        println!("Command: {} - data: {:?}", p.command, p.data);
+                                    } else {
+                                        println!("       ack: {} - data: {:?}", p.command, p.data);
+                                    }
+
                                     log::trace!("{:?}", p);
                                 }
                             }

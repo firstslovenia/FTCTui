@@ -46,7 +46,7 @@ pub struct Args {
     ///
     /// Does nothing on Windows.
     ///
-    /// You should likely only use this if the tty check doesn't work
+    /// You should only use this if the tty check doesn't work
     #[arg(long, default_value_t = false)]
     skip_tty_check: bool,
 
@@ -108,23 +108,32 @@ async fn main() -> color_eyre::Result<()> {
         let robot_config = crate::robot::Robot::new_fake().configuration_types.unwrap();
 
         let start = std::time::Instant::now();
-        let a = try_parse_xml_document(file.clone(), &robot_config).unwrap();
+        let parsed_original = try_parse_xml_document(file.clone(), &robot_config).unwrap();
         let parsed = std::time::Instant::now();
 
         let took_parse = parsed - start;
 
         log::info!("{}", file);
 
-        log::info!("{:?}", a);
+        log::info!("{:?}", parsed_original);
 
         let start_2 = std::time::Instant::now();
-        let b = write_xml_document(&a).unwrap();
+        let rewritten = write_xml_document(&parsed_original).unwrap();
         let written = std::time::Instant::now();
 
         let took_write = written - start_2;
 
-        log::info!("{}", b);
+        log::info!("{}", rewritten);
         log::info!("Parsing took {:?}, writing {:?}", took_parse, took_write);
+
+        let reparsed = try_parse_xml_document(rewritten, &robot_config).unwrap();
+
+        if reparsed != parsed_original {
+            log::error!(
+                "Parse of original rewritten don't match, something is wrong with the writer and or parser."
+            );
+        }
+
         return Ok(());
     }
 

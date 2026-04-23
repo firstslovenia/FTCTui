@@ -8,3 +8,5 @@ perf.data
 telemetry_log.json
 /FTCTui.AppDir
 *.AppImage
+*.xml
+*.json

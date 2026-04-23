@@ -1,5 +1,4 @@
 use crate::ftc_proto::{
-    self,
     command_packet::{
         DEFAULT_OPMODE_GROUP, OPMODE_STOP, OpModeData, OpModeFlavor, RobotConfigurationFile,
     },
@@ -22,6 +21,9 @@ pub struct Robot {
 
     /// The active configuration, if we've received one
     pub active_configuration: Option<RobotConfigurationFile>,
+
+    /// The parsed active configuration, if we've received one
+    pub active_configuration_data: Option<crate::ftc_proto::hardware::robot::Robot>,
 
     /// The valid configuration types, if we're received them from the server
     pub configuration_types: Option<Vec<HardwareDeviceType>>,
@@ -50,6 +52,7 @@ impl Robot {
             active_opmode: OPMODE_STOP.to_string(),
             opmode_list: None,
             active_configuration: None,
+            active_configuration_data: None,
             battery_voltage: None,
             last_battery_update: std::time::Instant::now(),
             warning_message: None,
@@ -109,6 +112,7 @@ impl Robot {
             ]),
             active_opmode: "Bautonomous".to_string(),
             active_configuration: None,
+            active_configuration_data: None,
             error_message: None,
             warning_message: Some(String::from("Test warning message")),
             battery_voltage: Some(12.3),
