@@ -60,7 +60,7 @@ impl App {
             ]));
         }
 
-        if let Some(active_config) = &robot.active_configuration {
+        if let Some(active_config) = &robot.hardware.read_blocking().active_configuration {
             robot_text.push(Line::from(vec![
                 Span::styled("Active configuration: ", Style::new().fg(MUTED_TEXT_COLOR)),
                 Span::styled(active_config.name.clone(), Style::new().fg(TEXT_COLOR)),

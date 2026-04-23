@@ -105,7 +105,10 @@ async fn main() -> color_eyre::Result<()> {
 
         let file = std::fs::read_to_string(configuration_path).expect("Failed to read file!");
 
-        let robot_config = crate::robot::Robot::new_fake().configuration_types.unwrap();
+        let fake = crate::robot::Robot::new_fake();
+        let fake_hardware = fake.hardware.read().await;
+
+        let robot_config = fake_hardware.configuration_types.as_ref().unwrap();
 
         let start = std::time::Instant::now();
         let parsed_original = try_parse_xml_document(file.clone(), &robot_config).unwrap();

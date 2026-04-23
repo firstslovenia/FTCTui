@@ -789,11 +789,13 @@ impl NetworkHandler {
                         .await
                         .unwrap();
 
-                        let mut write_lock = self.robot.write().await;
+                        let robot_lock = self.robot.read().await;
+                        let mut write_lock = robot_lock.hardware.write().await;
 
                         write_lock.configuration_types = Some(types);
 
                         drop(write_lock);
+                        drop(robot_lock);
                     }
                     Err(e) => {
                         log::warn!(
@@ -809,7 +811,8 @@ impl NetworkHandler {
                     Ok(config) => {
                         log::info!("Received robot configuration: {:?}", config);
 
-                        let mut write_lock = self.robot.write().await;
+                        let robot_lock = self.robot.read().await;
+                        let mut write_lock = robot_lock.hardware.write().await;
 
                         write_lock.active_configuration = Some(config);
 
@@ -827,6 +830,7 @@ impl NetworkHandler {
                         .await;
 
                         drop(write_lock);
+                        drop(robot_lock);
                     }
                     Err(e) => {
                         log::warn!(
@@ -843,7 +847,8 @@ impl NetworkHandler {
 
                 let _ = tokio::fs::write("robot-configuration.xml", &packet.data).await;
 
-                let mut write_lock = self.robot.write().await;
+                let robot_lock = self.robot.read().await;
+                let mut write_lock = robot_lock.hardware.write().await;
 
                 if let Some(types) = &write_lock.configuration_types {
                     let xml_configuration = try_parse_xml_document(packet.data, types).unwrap();
@@ -861,6 +866,9 @@ impl NetworkHandler {
                 } else {
                     log::warn!("We haven't received our configuration types yet..");
                 }
+
+                drop(write_lock);
+                drop(robot_lock);
             }
             NOTIFY_INIT_OPMODE => {
                 let mut robot_write = self.robot.write().await;
