@@ -14,17 +14,10 @@ use tokio::net::UdpSocket;
 use async_lock::{Mutex, RwLock};
 
 use crate::{
-    Args,
-    ftc_proto::command_packet::{
+    Args, ftc_proto::command_packet::{
         CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RESTART_ROBOT,
         RUN_OPMODE,
-    },
-    gamepad_map::{self, AsyncGilrs, REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX},
-    input::Gamepad,
-    r#match::{Match, MatchSFXHandler},
-    network::{NetworkStatus, SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
-    popup::{InfoPopup, Popup},
-    robot::Robot,
+    }, gamepad_map::{self, AsyncGilrs, REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX}, input::Gamepad, r#match::{Match, MatchSFXHandler}, network::{NetworkStatus, SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command}, popup::{InfoPopup, Popup}, renderers::hardware_configuration::HardwareConfigurationUI, robot::Robot
 };
 
 lazy_static! {
@@ -65,9 +58,6 @@ pub struct App {
 
     /// Number of lines scrolled in the telemetry display
     pub telemetry_display_scroll: u16,
-
-    /// Our current command buffer, if in [AppMode::InsertCommand]
-    pub current_command: String,
 
     /// What "mode" we're in, mostly used for input handling
     ///
@@ -148,7 +138,6 @@ impl App {
             gamepad_one,
             gamepad_two,
             mode: AppMode::Normal,
-            current_command: String::with_capacity(32),
             active_popup: Some(experimental_version_popup),
             quickmenu_state: None,
             active_match: None,
@@ -360,14 +349,16 @@ impl App {
 }
 
 /// What mode our UI is in, denotes what different inputs mean
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub enum AppMode {
     /// Tab switches selected elements, : opens command mode, different keys are hotkeys
     #[default]
     Normal,
     /// Enter submits the current command, escape returns to normal mode, character keys are added
     /// to the command buffer
-    InsertCommand,
+    InsertCommand(String),
+    /// Configuring hardware
+    ConfigureHardware(HardwareConfigurationUI),
 }
 
 /// Gets a millis timestamp of the app's uptime

@@ -16,6 +16,7 @@ use crate::{
 
 pub mod debug;
 pub mod gamepads;
+pub mod hardware_configuration;
 pub mod opmode;
 pub mod popup;
 pub mod robot;
@@ -31,17 +32,15 @@ impl App {
     ///
     /// Should NOT be async
     pub fn render(&mut self, frame: &mut Frame<'_>) {
-        let main_layout = match self.mode {
-            AppMode::Normal => {
-                Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
-                    .split(frame.area())
-            }
-            AppMode::InsertCommand => Layout::vertical([
+        let main_layout = match &self.mode {
+            AppMode::InsertCommand(_) => Layout::vertical([
                 Constraint::Percentage(50),
                 Constraint::Percentage(50),
                 Constraint::Length(1),
             ])
             .split(frame.area()),
+            _ => Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(frame.area()),
         };
 
         let top_inner_layout = Layout::horizontal([
@@ -151,16 +150,26 @@ impl App {
             gamepads_block.inner(bottom_inner_layout[1]),
         );
 
+        match &self.mode {
+            AppMode::ConfigureHardware(_) => {
+                // 
+            }
+            _ => {}
+        }
+
         self.render_popup_if_any(frame);
         self.render_quickmenu_if_open(frame);
 
         // Render the vim-like command thingy
-        if self.mode == AppMode::InsertCommand {
-            // Slightly left-padded
-            let command_paragraph =
-                Paragraph::new(format!(":{}█", self.current_command)).fg(TEXT_COLOR);
+        match &self.mode {
+            AppMode::InsertCommand(current_command) => {
+                // Slightly left-padded
+                let command_paragraph =
+                    Paragraph::new(format!(":{}█", current_command)).fg(TEXT_COLOR);
 
-            frame.render_widget(command_paragraph, main_layout[2]);
+                frame.render_widget(command_paragraph, main_layout[2]);
+            }
+            _ => {}
         }
     }
 }

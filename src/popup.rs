@@ -117,3 +117,43 @@ impl Popup for RestartRobotPopup {
     fn scroll_up(&mut self) {}
     fn scroll_down(&mut self) {}
 }
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SaveConfigurationPopup {
+    pub selected_yes: bool,
+}
+
+impl Popup for SaveConfigurationPopup {
+    fn title(&self) -> String {
+        String::from("Save Configuration?")
+    }
+
+    fn text(&self) -> Paragraph<'_> {
+        Paragraph::new("Would you like to save your new configuration?")
+    }
+
+    fn options(&self) -> Vec<String> {
+        vec!["Yes".to_string(), "No".to_string()]
+    }
+
+    fn submit(&mut self, app: &mut App) {
+        if self.selected_yes {
+            // TODO: do something here
+        }
+    }
+
+    fn selected_option(&self) -> u8 {
+        if self.selected_yes { 0 } else { 1 }
+    }
+
+    fn select_next_option(&mut self) {
+        self.selected_yes = !self.selected_yes;
+    }
+
+    fn select_previous_option(&mut self) {
+        self.selected_yes = !self.selected_yes;
+    }
+
+    fn scroll_up(&mut self) {}
+    fn scroll_down(&mut self) {}
+}

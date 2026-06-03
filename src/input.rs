@@ -18,10 +18,14 @@ use crate::{
         time_packet::RobotOpmodeState,
     },
     r#match::Match,
-    popup::RestartRobotPopup,
-    renderers::popup::{
-        QUICKMENU_OPTION_CLOSE_QUICKMENU, QUICKMENU_OPTION_EXIT_APP,
-        QUICKMENU_OPTION_RESTART_ROBOT, QUICKMENU_OPTION_TOGGLE_MATCH,
+    popup::{InfoPopup, RestartRobotPopup},
+    renderers::{
+        hardware_configuration::HardwareConfigurationUI,
+        popup::{
+            QUICKMENU_OPTION_CLOSE_QUICKMENU, QUICKMENU_OPTION_CONFIGURE_HARDWARE,
+            QUICKMENU_OPTION_EXIT_APP, QUICKMENU_OPTION_RESTART_ROBOT, QUICKMENU_OPTION_SETTINGS,
+            QUICKMENU_OPTION_TOGGLE_MATCH,
+        },
     },
 };
 
@@ -30,9 +34,10 @@ use gilrs::{Axis, Button, GamepadId, Gilrs, MappingSource};
 impl App {
     /// Handles the key events and updates the state of [`App`].
     pub async fn on_key_event(&mut self, key: KeyEvent) {
-        match self.mode {
+        match &mut self.mode {
             AppMode::Normal => self.on_normal_mode_key_event(key).await,
-            AppMode::InsertCommand => self.on_command_insert_mode_key_event(key).await,
+            AppMode::InsertCommand(_) => self.on_command_insert_mode_key_event(key).await,
+            AppMode::ConfigureHardware(_) => HardwareConfigurationUI::on_key_event(self, key).await,
         }
     }
 
@@ -55,8 +60,7 @@ impl App {
 
             // Change modes into command mode
             (_, KeyCode::Char(':')) => {
-                self.mode = AppMode::InsertCommand;
-                self.current_command.clear();
+                self.mode = AppMode::InsertCommand(String::with_capacity(32));
             }
 
             // Open quickmenu
@@ -83,6 +87,15 @@ impl App {
                             self.active_popup = Some(Arc::new(Mutex::new(RestartRobotPopup {
                                 selected_yes: false,
                             })))
+                        }
+                        QUICKMENU_OPTION_SETTINGS => {
+                            self.show_toast(String::from(
+                                "Sorry, settings are not implemented yet!",
+                            ));
+                        }
+                        QUICKMENU_OPTION_CONFIGURE_HARDWARE => {
+                            self.mode =
+                                AppMode::ConfigureHardware(HardwareConfigurationUI::default())
                         }
                         QUICKMENU_OPTION_TOGGLE_MATCH => {
                             if self.active_match.is_some() {
@@ -266,23 +279,28 @@ impl App {
             // Return to normal mode
             (_, KeyCode::Esc) => {
                 self.mode = AppMode::Normal;
-                self.current_command.clear();
             }
 
             // Submit command
             (_, KeyCode::Enter) => {
                 self.mode = AppMode::Normal;
-                self.submit_command(self.current_command.clone()).await;
-                self.current_command.clear();
+
+                if let AppMode::InsertCommand(command) = &self.mode {
+                    self.submit_command(command.clone()).await;
+                }
             }
 
             // Delete one character
             (_, KeyCode::Backspace) => {
-                self.current_command.pop();
+                if let AppMode::InsertCommand(command) = &mut self.mode {
+                    command.pop();
+                }
             }
 
             (_, KeyCode::Char(char)) => {
-                self.current_command.push(char);
+                if let AppMode::InsertCommand(command) = &mut self.mode {
+                    command.push(char);
+                }
             }
             _ => {}
         }

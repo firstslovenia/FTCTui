@@ -14,15 +14,19 @@ use crate::{
 // Indexes of each quickmenu option
 pub const QUICKMENU_OPTION_CLOSE_QUICKMENU: usize = 0;
 pub const QUICKMENU_OPTION_RESTART_ROBOT: usize = 1;
-pub const QUICKMENU_OPTION_TOGGLE_MATCH: usize = 2;
-pub const QUICKMENU_OPTION_EXIT_APP: usize = 3;
+pub const QUICKMENU_OPTION_SETTINGS: usize = 2;
+pub const QUICKMENU_OPTION_CONFIGURE_HARDWARE: usize = 3;
+pub const QUICKMENU_OPTION_TOGGLE_MATCH: usize = 4;
+pub const QUICKMENU_OPTION_EXIT_APP: usize = 5;
 
 /// How many options the quickmenu has
-pub const QUICKMENU_OPTIONS_NUM: usize = 4;
+pub const QUICKMENU_OPTIONS_NUM: usize = 6;
 
 // Text of each quickmenu option
 pub const QUICKMENU_TEXT_CLOSE: &str = "Close Quickmenu";
 pub const QUICKMENU_TEXT_RESTART: &str = "Restart Robot";
+pub const QUICKMENU_TEXT_SETTINGS: &str = "Settings";
+pub const QUICKMENU_TEXT_CONFIGURE_HARDWARE: &str = "Configure Hardware";
 pub const QUICKMENU_TEXT_START_MATCH: &str = "Start Match";
 pub const QUICKMENU_TEXT_STOP_MATCH: &str = "Stop Match";
 pub const QUICKMENU_TEXT_EXIT_APP: &str = "Exit";
@@ -147,6 +151,10 @@ impl App {
             match i {
                 QUICKMENU_OPTION_CLOSE_QUICKMENU => quickmenu_options.push(QUICKMENU_TEXT_CLOSE),
                 QUICKMENU_OPTION_RESTART_ROBOT => quickmenu_options.push(QUICKMENU_TEXT_RESTART),
+                QUICKMENU_OPTION_SETTINGS => quickmenu_options.push(QUICKMENU_TEXT_SETTINGS),
+                QUICKMENU_OPTION_CONFIGURE_HARDWARE => {
+                    quickmenu_options.push(QUICKMENU_TEXT_CONFIGURE_HARDWARE)
+                }
                 QUICKMENU_OPTION_TOGGLE_MATCH => {
                     if let Some(active_match) = self.active_match
                         && !active_match.is_over()
