@@ -59,9 +59,9 @@ On Windows running the .exe should open the app inside a command prompt.
 
 ### Linux
 
-To unzip the archive:
+Rename the binary:
 
-```unzip ftctui_v0.1.0_linux_x64.zip```
+```mv ftctui_linux_x64 ftctui```
 
 You may need to manually mark it as an executable:
 
@@ -88,19 +88,19 @@ You can select the next block with Tab / Right arrow, and the previous one with 
 
 Pressing space at any point will stop or start the active opmode.
 
-| Hotkey                   | Use                                                           |
-|--------------------------|---------------------------------------------------------------|
-| q                        | Open quickmenu                                                |
-| r                        | Restart robot                                                 |
-| Tab / Right arrow        | Select next block                                             |
-| Shift + Tab / Left arrow | Select previous block                                         |
-| k / Up arrow             | Move selection up / Scroll up                                 |
-| j / Down arrow           | Move selection down / Scroll down                             |
-| Enter                    | Activate selected (initialize / run / stop OpMode)            |
-| Space                    | Activate current OpMode (run if initialized, stop if running) |
-| Escape                   | Go back                                                       |
-| Ctrl + c                 | Quit                                                          |
-| :                        | Open command bar                                              |
+| Hotkey                   | Use                                                |
+|--------------------------|----------------------------------------------------|
+| q                        | Open quickmenu                                     |
+| r                        | Restart robot                                      |
+| Tab / Right arrow        | Select next block                                  |
+| Shift + Tab / Left arrow | Select previous block                              |
+| k / Up arrow             | Move selection up / Scroll up                      |
+| j / Down arrow           | Move selection down / Scroll down                  |
+| Enter                    | Activate selected (initialize / run / stop OpMode) |
+| Space                    | Abort / stop OpMode                                |
+| Escape                   | Go back                                            |
+| Ctrl + c                 | Quit                                               |
+| :                        | Open command bar                                   |
 
 ### Gamepads
 

@@ -192,23 +192,13 @@ impl App {
                 _ => {}
             },
 
-            // Stop / start button
+            // Stop button
             (KeyModifiers::NONE, KeyCode::Char(' ')) => {
                 let robot = self.robot.read().await;
 
-                if let Some(opmode_state) = &robot.active_opmode_state {
+                if robot.active_opmode_state.is_some() {
                     if robot.active_opmode != OPMODE_STOP {
-                        match opmode_state {
-                            RobotOpmodeState::Initialized
-                            | RobotOpmodeState::Stopped
-                            | RobotOpmodeState::NotStarted => {
-                                self.start_opmode(robot.active_opmode.clone()).await;
-                            }
-                            RobotOpmodeState::Running => {
-                                self.stop_opmode().await;
-                            }
-                            _ => {}
-                        }
+                        self.stop_opmode().await;
                     }
                 }
             }
