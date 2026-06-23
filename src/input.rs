@@ -61,10 +61,10 @@ impl App {
 
             // Open quickmenu
             (_, KeyCode::Char('q')) => {
-					 let mut state = ListState::default();
+                let mut state = ListState::default();
 
-					 // Bandaid fix for having to press twice to move down for the first time
-					 state.select_next();
+                // Bandaid fix for having to press twice to move down for the first time
+                state.select_next();
 
                 self.quickmenu_state = Some(state);
             }
@@ -179,23 +179,13 @@ impl App {
                 _ => {}
             },
 
-            // Stop / start button
+            // Stop button
             (KeyModifiers::NONE, KeyCode::Char(' ')) => {
                 let robot = self.robot.read().await;
 
-                if let Some(opmode_state) = &robot.active_opmode_state {
+                if robot.active_opmode_state.is_some() {
                     if robot.active_opmode != OPMODE_STOP {
-                        match opmode_state {
-                            RobotOpmodeState::Initialized
-                            | RobotOpmodeState::Stopped
-                            | RobotOpmodeState::NotStarted => {
-                                self.start_opmode(robot.active_opmode.clone()).await;
-                            }
-                            RobotOpmodeState::Running => {
-                                self.stop_opmode().await;
-                            }
-                            _ => {}
-                        }
+                        self.stop_opmode().await;
                     }
                 }
             }
