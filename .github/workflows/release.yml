@@ -58,3 +58,22 @@ jobs:
           file: ./ftctui-x86_64.AppImage
           asset_name: ftctui_linux_x64.AppImage
           tag: ${{ github.ref }}
+
+  release-macos:
+    name: release macos arm64
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: Compile
+        run: cargo build --release
+      - name: Upload release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/release/ftctui
+          asset_name: ftctui_macos_arm64
+          tag: ${{ github.ref }}
