@@ -10,15 +10,16 @@ use crate::{
     App,
     app::{
         ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, AppMode, GAMEPADS_BLOCK_ID, TELEOP_BLOCK_ID,
-        get_timestamp_millis,
+        get_timestamp_millis, get_timestamp_nanos,
     },
     ftc_proto::{
-        command_packet::OPMODE_STOP,
+        command_packet::{CommandPacketData, OPMODE_STOP, REQUEST_CONFIGURATIONS},
         gamepad_packet::{ButtonFlags, GamepadPacketData},
         time_packet::RobotOpmodeState,
     },
     r#match::Match,
-    popup::{InfoPopup, RestartRobotPopup},
+    network::send_command,
+    popup::RestartRobotPopup,
     renderers::{
         hardware_configuration::HardwareConfigurationUI,
         popup::{
@@ -48,8 +49,7 @@ impl App {
         // Universal, always active key handlers
         match (key.modifiers, key.code) {
             // Quit handler
-            (_, KeyCode::Esc)
-            | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit().await,
+            (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit().await,
 
             // Restart handler
             (_, KeyCode::Char('r')) => {
@@ -79,6 +79,11 @@ impl App {
         // Quickmenu key handlers
         if let Some(quickmenu_state) = self.quickmenu_state.as_mut() {
             match (key.modifiers, key.code) {
+                // Close
+                (_, KeyCode::Esc) => {
+                    self.quickmenu_state = None;
+                }
+
                 // Submit
                 (_, KeyCode::Enter) => {
                     match quickmenu_state.selected().unwrap_or_default() {
@@ -95,7 +100,19 @@ impl App {
                         }
                         QUICKMENU_OPTION_CONFIGURE_HARDWARE => {
                             self.mode =
-                                AppMode::ConfigureHardware(HardwareConfigurationUI::default())
+                                AppMode::ConfigureHardware(HardwareConfigurationUI::default());
+
+                            send_command(
+                                &self.socket,
+                                CommandPacketData {
+                                    acknowledged: false,
+                                    command: REQUEST_CONFIGURATIONS.to_string(),
+                                    timestamp: get_timestamp_nanos(),
+                                    data: String::new(),
+                                },
+                                self.shared_network_data.clone(),
+                            )
+                            .await;
                         }
                         QUICKMENU_OPTION_TOGGLE_MATCH => {
                             if self.active_match.is_some() {
@@ -135,7 +152,7 @@ impl App {
         if let Some(popup) = self.active_popup.clone() {
             match (key.modifiers, key.code) {
                 // Submit
-                (_, KeyCode::Enter) => {
+                (_, KeyCode::Enter) | (_, KeyCode::Esc) => {
                     popup.lock().await.submit(self);
                     self.active_popup = None;
                 }
