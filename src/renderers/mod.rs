@@ -12,6 +12,7 @@ use crate::{
         ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, AppMode, DEBUG_BLOCK_ID, GAMEPADS_BLOCK_ID,
         ROBOT_BLOCK_ID, TELEOP_BLOCK_ID,
     },
+    renderers::hardware_configuration::HardwareConfigurationUI,
 };
 
 pub mod debug;
@@ -152,7 +153,7 @@ impl App {
 
         match &self.mode {
             AppMode::ConfigureHardware(_) => {
-                // 
+                //
             }
             _ => {}
         }
@@ -168,6 +169,9 @@ impl App {
                     Paragraph::new(format!(":{}█", current_command)).fg(TEXT_COLOR);
 
                 frame.render_widget(command_paragraph, main_layout[2]);
+            }
+            AppMode::ConfigureHardware(_) => {
+                HardwareConfigurationUI::render(self, frame);
             }
             _ => {}
         }

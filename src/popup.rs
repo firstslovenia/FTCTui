@@ -136,7 +136,7 @@ impl Popup for SaveConfigurationPopup {
         vec!["Yes".to_string(), "No".to_string()]
     }
 
-    fn submit(&mut self, app: &mut App) {
+    fn submit(&mut self, _app: &mut App) {
         if self.selected_yes {
             // TODO: do something here
         }

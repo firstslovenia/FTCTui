@@ -13,8 +13,8 @@ use crate::{
             CommandPacketData, INIT_OPMODE, NOTIFY_ACTIVE_CONFIGURATION,
             NOTIFY_CONFIGURATION_TYPES, NOTIFY_INIT_OPMODE, NOTIFY_OP_MODE_STATE, NOTIFY_OP_MODES,
             NOTIFY_RUN_OPMODE, OPMODE_STOP, OpModeData, REQUEST_ACTIVE_CONFIGURATION,
-            REQUEST_CONFIGURATION, REQUEST_CONFIGURATION_RESPONSE, REQUEST_OP_MODES,
-            RobotConfigurationFile, SHOW_STACKTRACE,
+            REQUEST_CONFIGURATION, REQUEST_CONFIGURATION_RESPONSE, REQUEST_CONFIGURATIONS_RESPONSE,
+            REQUEST_OP_MODES, RobotConfigurationFile, SHOW_STACKTRACE,
         },
         gamepad_packet::GamepadPacketData,
         hardware::{
@@ -865,6 +865,24 @@ impl NetworkHandler {
                     write_lock.active_configuration_data = Some(xml_configuration);
                 } else {
                     log::warn!("We haven't received our configuration types yet..");
+                }
+
+                drop(write_lock);
+                drop(robot_lock);
+            }
+            REQUEST_CONFIGURATIONS_RESPONSE => {
+                log::info!("Received robot configurations!");
+
+                let robot_lock = self.robot.read().await;
+                let mut write_lock = robot_lock.hardware.write().await;
+
+                if let Ok(configurations) =
+                    serde_json::from_str::<Vec<RobotConfigurationFile>>(&packet.data)
+                {
+                    log::warn!("Successfully parsed robot configurations!");
+                    write_lock.configurations = Some(configurations);
+                } else {
+                    log::warn!("Could not parse robot configurations!");
                 }
 
                 drop(write_lock);
