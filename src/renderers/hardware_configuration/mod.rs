@@ -11,24 +11,49 @@ use crate::{
     app::{App, AppMode, get_timestamp_nanos},
     ftc_proto::command_packet::{CommandPacketData, REQUEST_CONFIGURATION, RobotConfigurationFile},
     network::send_command,
-    renderers::styles::{
-        MUTED_TEXT_COLOR, SELECTED_BACKGROUND, SUCCESS_COLOR, TEXT_COLOR, block_style,
-        muted_text_style, text_style,
+    renderers::{
+        create_list_state,
+        hardware_configuration::{
+            HardwareConfigurationUIState::{Choosing, InMenu},
+            editing::EditingData,
+            in_menu::InMenuData,
+        },
+        styles::{
+            MUTED_TEXT_COLOR, SELECTED_BACKGROUND, SUCCESS_COLOR, TEXT_COLOR, block_style,
+            muted_text_style, text_style,
+        },
     },
 };
 
+pub mod choosing;
+pub mod editing;
+pub mod in_menu;
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum HardwareConfigurationUIState {
+    Choosing(ListState),
+    Importing(ListState),
+    InMenu(InMenuData),
+    Editing(EditingData),
+}
+
+impl HardwareConfigurationUIState {
+    pub fn new_choosing() -> HardwareConfigurationUIState {
+        HardwareConfigurationUIState::Choosing(create_list_state())
+    }
+
+    pub fn new_in_menu(config: RobotConfigurationFile) -> HardwareConfigurationUIState {
+        HardwareConfigurationUIState::InMenu(InMenuData {
+            config,
+            list_state: create_list_state(),
+            config_data: None,
+        })
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HardwareConfigurationUI {
-    /// Choosing which configuration to use
-    pub configurations_state: Option<ListState>,
-
-    /// Configuration menu
-    pub selected_configuration: Option<RobotConfigurationFile>,
-    pub selected_configuration_data: Option<crate::ftc_proto::hardware::robot::Robot>,
-    pub selected_configuration_state: Option<ListState>,
-
-    /// Editing a configuration
-    pub selected_configuration_edited_data: Option<crate::ftc_proto::hardware::robot::Robot>,
+    state: HardwareConfigurationUIState,
 }
 
 impl Default for HardwareConfigurationUI {
@@ -37,11 +62,7 @@ impl Default for HardwareConfigurationUI {
         list_state.select_next();
 
         HardwareConfigurationUI {
-            configurations_state: Some(list_state),
-            selected_configuration: None,
-            selected_configuration_state: None,
-            selected_configuration_data: None,
-            selected_configuration_edited_data: None,
+            state: HardwareConfigurationUIState::new_choosing(),
         }
     }
 }
@@ -49,7 +70,7 @@ impl Default for HardwareConfigurationUI {
 impl HardwareConfigurationUI {
     /// Renders the hardware configuration UI, assuming it's open
     pub fn render(app: &mut App, frame: &mut Frame<'_>) {
-        let AppMode::ConfigureHardware(state) = &mut app.mode else {
+        let AppMode::ConfigureHardware(ui) = &mut app.mode else {
             return;
         };
 
@@ -60,13 +81,12 @@ impl HardwareConfigurationUI {
 
         let robot = futures::executor::block_on(app.robot.read());
         let hardware = futures::executor::block_on(robot.hardware.read());
-        let mut render_configurations_list = None;
-        let mut render_selected_list = None;
+        let mut list_to_render = None;
         let mut max_length = 0;
         let mut max_height = 0;
 
         // Selecting a configuration
-        if let Some(config_list_state) = state.configurations_state {
+        if let HardwareConfigurationUIState::Choosing(config_list_state) = &ui.state {
             let mut items: Vec<ListItem> = Vec::new();
 
             items.push(ListItem::new(Span::styled("Back", muted_text_style())));
@@ -101,6 +121,7 @@ impl HardwareConfigurationUI {
                 }
             }
 
+            // This doesn't work?
             for item in &items {
                 if item.width() > max_length {
                     max_length = item.width();
@@ -109,16 +130,16 @@ impl HardwareConfigurationUI {
             max_height = items.len();
 
             let list = List::new(items);
-            render_configurations_list = Some(list);
+            list_to_render = Some(list);
         }
 
         // Menu for one specific configuration
-        if let Some(selected_config) = &state.selected_configuration {
-            let list_state = state.selected_configuration_state.unwrap();
+        if let HardwareConfigurationUIState::InMenu(state) = ui.state.clone() {
+            let list_state = state.list_state;
             let mut items: Vec<ListItem> = Vec::new();
 
             items.push(ListItem::new(Span::styled(
-                &selected_config.name,
+                state.config.name,
                 text_style(),
             )));
             items.push(ListItem::new(Span::styled("Back", muted_text_style())));
@@ -145,7 +166,7 @@ impl HardwareConfigurationUI {
             max_height = items.len();
 
             let list = List::new(items);
-            render_selected_list = Some(list);
+            list_to_render = Some(list);
         }
 
         let mut horizontal = Layout::horizontal([Constraint::Percentage(30)]).flex(Flex::Center);
@@ -189,24 +210,28 @@ impl HardwareConfigurationUI {
 
         frame.render_widget(Clear, block_inner_area);
 
-        if let Some(list) = render_configurations_list {
-            frame.render_stateful_widget(
-                list,
-                block_inner_area,
-                state.configurations_state.as_mut().unwrap(),
-            );
-        } else if let Some(list) = render_selected_list {
-            frame.render_stateful_widget(
-                list,
-                block_inner_area,
-                state.selected_configuration_state.as_mut().unwrap(),
-            );
+        match &mut ui.state {
+            Choosing(state) => {
+                frame.render_stateful_widget(
+                    list_to_render.as_ref().unwrap(),
+                    block_inner_area,
+                    state,
+                );
+            }
+            InMenu(data) => {
+                frame.render_stateful_widget(
+                    list_to_render.as_ref().unwrap(),
+                    block_inner_area,
+                    &mut data.list_state,
+                );
+            }
+            _ => {}
         }
     }
 
     /// Handles inputs when in the UI
     pub async fn on_key_event(app: &mut App, key: KeyEvent) {
-        let AppMode::ConfigureHardware(state) = &mut app.mode else {
+        let AppMode::ConfigureHardware(ui) = &mut app.mode else {
             return;
         };
 
@@ -227,17 +252,17 @@ impl HardwareConfigurationUI {
         let robot = futures::executor::block_on(app.robot.read());
         let hardware = futures::executor::block_on(robot.hardware.read());
 
-        if let Some(configurations_list_state) = state.configurations_state.as_mut() {
+        if let HardwareConfigurationUIState::Choosing(state) = &mut ui.state {
             match (key.modifiers, key.code) {
                 (_, KeyCode::BackTab) | (_, KeyCode::Up) | (_, KeyCode::Char('k')) => {
-                    configurations_list_state.select_previous();
+                    state.select_previous();
                 }
 
                 (_, KeyCode::Tab) | (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
-                    configurations_list_state.select_next();
+                    state.select_next();
                 }
                 (_, KeyCode::Enter) => {
-                    let selected = configurations_list_state.selected().unwrap_or(0);
+                    let selected = state.selected().unwrap_or(0);
 
                     // Back button
                     if selected == 0 {
@@ -261,14 +286,7 @@ impl HardwareConfigurationUI {
 
                     if let Some(configurations) = &hardware.configurations {
                         let configuration = configurations[configuration_index].clone();
-                        state.configurations_state = None;
-                        state.selected_configuration = Some(configuration.clone());
-                        state.selected_configuration_state = Some(ListState::default());
-                        state
-                            .selected_configuration_state
-                            .as_mut()
-                            .unwrap()
-                            .select_next();
+                        ui.state = HardwareConfigurationUIState::new_in_menu(configuration.clone());
 
                         send_command(
                             &app.socket,
@@ -285,17 +303,19 @@ impl HardwareConfigurationUI {
             }
         }
 
-        if let Some(selected_list_state) = state.selected_configuration_state.as_mut() {
+        if let HardwareConfigurationUIState::InMenu(state) = &mut ui.state {
+            let list_state = &mut state.list_state;
+
             match (key.modifiers, key.code) {
                 (_, KeyCode::BackTab) | (_, KeyCode::Up) | (_, KeyCode::Char('k')) => {
-                    selected_list_state.select_previous();
+                    list_state.select_previous();
                 }
 
                 (_, KeyCode::Tab) | (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
-                    selected_list_state.select_next();
+                    list_state.select_next();
                 }
                 (_, KeyCode::Enter) => {
-                    let selected = selected_list_state.selected().unwrap_or(0);
+                    let selected = list_state.selected().unwrap_or(0);
 
                     match selected {
                         // Edit configuration name
@@ -303,10 +323,7 @@ impl HardwareConfigurationUI {
 
                         // Back
                         1 => {
-                            state.selected_configuration = None;
-                            state.selected_configuration_state = None;
-                            state.configurations_state = Some(ListState::default());
-                            state.configurations_state.as_mut().unwrap().select_next();
+                            ui.state = HardwareConfigurationUIState::new_choosing();
                             return;
                         }
 

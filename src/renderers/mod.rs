@@ -1,8 +1,5 @@
 use ratatui::{
-    Frame,
-    layout::{Constraint, Layout},
-    style::Stylize,
-    widgets::{Block, Clear, Padding, Paragraph},
+    Frame, layout::{Constraint, Layout}, style::Stylize, widgets::{Block, Clear, ListState, Padding, Paragraph},
 };
 use styles::{TEXT_COLOR, block_style, selected_block_style};
 
@@ -22,6 +19,16 @@ pub mod opmode;
 pub mod popup;
 pub mod robot;
 pub mod styles;
+
+/// Creates a new list state
+///
+/// Used to fix the issue of having to
+/// move downwards once before doing anything
+pub fn create_list_state() -> ListState {
+    let mut state = ListState::default();
+    state.select_next();
+    return state;
+}
 
 impl App {
     /// Renders the user interface.
