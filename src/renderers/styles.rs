@@ -18,6 +18,14 @@ pub const WARNING_COLOR: Color = Color::from_u32(0xFFBA49);
 
 pub const SUCCESS_COLOR: Color = Color::from_u32(0xB8BB26);
 
+pub fn text_style() -> Style {
+    Style::new().fg(TEXT_COLOR)
+}
+
+pub fn muted_text_style() -> Style {
+    Style::new().fg(MUTED_TEXT_COLOR)
+}
+
 pub fn block_style() -> Style {
     Style::new().fg(PRIMARY_COLOR)
 }

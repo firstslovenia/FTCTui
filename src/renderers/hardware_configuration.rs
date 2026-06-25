@@ -1,4 +1,3 @@
-
 use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
@@ -9,21 +8,40 @@ use ratatui::{
 };
 
 use crate::{
-    app::{App, AppMode},
+    app::{App, AppMode, get_timestamp_nanos},
+    ftc_proto::command_packet::{CommandPacketData, REQUEST_CONFIGURATION, RobotConfigurationFile},
+    network::send_command,
     renderers::styles::{
         MUTED_TEXT_COLOR, SELECTED_BACKGROUND, SUCCESS_COLOR, TEXT_COLOR, block_style,
+        muted_text_style, text_style,
     },
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HardwareConfigurationUI {
+    /// Choosing which configuration to use
     pub configurations_state: Option<ListState>,
+
+    /// Configuration menu
+    pub selected_configuration: Option<RobotConfigurationFile>,
+    pub selected_configuration_data: Option<crate::ftc_proto::hardware::robot::Robot>,
+    pub selected_configuration_state: Option<ListState>,
+
+    /// Editing a configuration
+    pub selected_configuration_edited_data: Option<crate::ftc_proto::hardware::robot::Robot>,
 }
 
 impl Default for HardwareConfigurationUI {
     fn default() -> Self {
+        let mut list_state = ListState::default();
+        list_state.select_next();
+
         HardwareConfigurationUI {
-            configurations_state: Some(ListState::default()),
+            configurations_state: Some(list_state),
+            selected_configuration: None,
+            selected_configuration_state: None,
+            selected_configuration_data: None,
+            selected_configuration_edited_data: None,
         }
     }
 }
@@ -40,30 +58,29 @@ impl HardwareConfigurationUI {
             .border_style(block_style())
             .padding(Padding::new(2, 2, 1, 1));
 
-        let mut render_list = None;
+        let robot = futures::executor::block_on(app.robot.read());
+        let hardware = futures::executor::block_on(robot.hardware.read());
+        let mut render_configurations_list = None;
+        let mut render_selected_list = None;
         let mut max_length = 0;
         let mut max_height = 0;
 
         // Selecting a configuration
         if let Some(config_list_state) = state.configurations_state {
             let mut items: Vec<ListItem> = Vec::new();
-            let robot = futures::executor::block_on(app.robot.read());
-            let hardware = futures::executor::block_on(robot.hardware.read());
 
+            items.push(ListItem::new(Span::styled("Back", muted_text_style())));
             items.push(ListItem::new(Span::styled(
-                "Back",
-                Style::new().fg(MUTED_TEXT_COLOR),
+                "Import from file",
+                muted_text_style(),
             )));
-            items.push(ListItem::new(Span::styled(
-                "Load from file",
-                Style::new().fg(MUTED_TEXT_COLOR),
-            )));
+            items.push(ListItem::new(Span::styled("New", muted_text_style())));
 
             if let Some(configurations) = &hardware.configurations {
                 for i in 0..configurations.len() {
                     let mut selected_config = configurations[i].clone();
 
-                    let mut style = Style::new().fg(TEXT_COLOR);
+                    let mut style = text_style();
 
                     if let Some(active_config) = &hardware.active_configuration {
                         if active_config.name == selected_config.name {
@@ -84,11 +101,40 @@ impl HardwareConfigurationUI {
                 }
             }
 
-            if items.len() == 0 {
-                items.push(ListItem::new(Span::styled(
-                    "<No configurations available>",
-                    Style::new().fg(TEXT_COLOR),
-                )));
+            for item in &items {
+                if item.width() > max_length {
+                    max_length = item.width();
+                }
+            }
+            max_height = items.len();
+
+            let list = List::new(items);
+            render_configurations_list = Some(list);
+        }
+
+        // Menu for one specific configuration
+        if let Some(selected_config) = &state.selected_configuration {
+            let list_state = state.selected_configuration_state.unwrap();
+            let mut items: Vec<ListItem> = Vec::new();
+
+            items.push(ListItem::new(Span::styled(
+                &selected_config.name,
+                text_style(),
+            )));
+            items.push(ListItem::new(Span::styled("Back", muted_text_style())));
+            items.push(ListItem::new(Span::styled("Save", muted_text_style())));
+            items.push(ListItem::new(Span::styled("Edit", muted_text_style())));
+            items.push(ListItem::new(Span::styled(
+                "Export to file",
+                muted_text_style(),
+            )));
+
+            for (i, item) in items.iter_mut().enumerate() {
+                let selected = list_state.selected().unwrap_or_default() == i;
+
+                if selected {
+                    *item = item.clone().bg(SELECTED_BACKGROUND);
+                }
             }
 
             for item in &items {
@@ -99,7 +145,7 @@ impl HardwareConfigurationUI {
             max_height = items.len();
 
             let list = List::new(items);
-            render_list = Some(list);
+            render_selected_list = Some(list);
         }
 
         let mut horizontal = Layout::horizontal([Constraint::Percentage(30)]).flex(Flex::Center);
@@ -142,11 +188,18 @@ impl HardwareConfigurationUI {
         frame.render_widget(block, area);
 
         frame.render_widget(Clear, block_inner_area);
-        if let Some(list) = render_list {
+
+        if let Some(list) = render_configurations_list {
             frame.render_stateful_widget(
                 list,
                 block_inner_area,
                 state.configurations_state.as_mut().unwrap(),
+            );
+        } else if let Some(list) = render_selected_list {
+            frame.render_stateful_widget(
+                list,
+                block_inner_area,
+                state.selected_configuration_state.as_mut().unwrap(),
             );
         }
     }
@@ -171,6 +224,9 @@ impl HardwareConfigurationUI {
             _ => {}
         }
 
+        let robot = futures::executor::block_on(app.robot.read());
+        let hardware = futures::executor::block_on(robot.hardware.read());
+
         if let Some(configurations_list_state) = state.configurations_state.as_mut() {
             match (key.modifiers, key.code) {
                 (_, KeyCode::BackTab) | (_, KeyCode::Up) | (_, KeyCode::Char('k')) => {
@@ -179,6 +235,94 @@ impl HardwareConfigurationUI {
 
                 (_, KeyCode::Tab) | (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
                     configurations_list_state.select_next();
+                }
+                (_, KeyCode::Enter) => {
+                    let selected = configurations_list_state.selected().unwrap_or(0);
+
+                    // Back button
+                    if selected == 0 {
+                        app.mode = AppMode::Normal;
+                        return;
+                    }
+
+                    // Load from file
+                    if selected == 1 {
+                        // TODO
+                        return;
+                    }
+
+                    // New
+                    if selected == 2 {
+                        // TODO
+                        return;
+                    }
+
+                    let configuration_index = selected - 3;
+
+                    if let Some(configurations) = &hardware.configurations {
+                        let configuration = configurations[configuration_index].clone();
+                        state.configurations_state = None;
+                        state.selected_configuration = Some(configuration.clone());
+                        state.selected_configuration_state = Some(ListState::default());
+                        state
+                            .selected_configuration_state
+                            .as_mut()
+                            .unwrap()
+                            .select_next();
+
+                        send_command(
+                            &app.socket,
+                            CommandPacketData {
+                                acknowledged: false,
+                                command: REQUEST_CONFIGURATION.to_string(),
+                                data: configuration.name,
+                                timestamp: get_timestamp_nanos(),
+                            },
+                            app.shared_network_data.clone(),
+                        )
+                        .await;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(selected_list_state) = state.selected_configuration_state.as_mut() {
+            match (key.modifiers, key.code) {
+                (_, KeyCode::BackTab) | (_, KeyCode::Up) | (_, KeyCode::Char('k')) => {
+                    selected_list_state.select_previous();
+                }
+
+                (_, KeyCode::Tab) | (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
+                    selected_list_state.select_next();
+                }
+                (_, KeyCode::Enter) => {
+                    let selected = selected_list_state.selected().unwrap_or(0);
+
+                    match selected {
+                        // Edit configuration name
+                        0 => {}
+
+                        // Back
+                        1 => {
+                            state.selected_configuration = None;
+                            state.selected_configuration_state = None;
+                            state.configurations_state = Some(ListState::default());
+                            state.configurations_state.as_mut().unwrap().select_next();
+                            return;
+                        }
+
+                        // Save
+                        2 => {}
+
+                        // Edit
+                        3 => {}
+
+                        // Export to file
+                        4 => {}
+
+                        _ => {}
+                    }
                 }
                 _ => {}
             }
