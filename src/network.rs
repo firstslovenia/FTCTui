@@ -79,6 +79,9 @@ pub struct SharedNetworkData {
 
     /// The last time we received a packet
     pub last_received: Option<std::time::Instant>,
+
+    /// The last configuration file we've requested
+    pub last_requested_configuration: Option<RobotConfigurationFile>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,6 +90,25 @@ pub enum NetworkStatus {
     Establishing,
     Connected,
     Disconnected,
+}
+
+/// Requests that the robot sends us data for a specific configuration
+pub async fn request_configuration(
+    socket: &Arc<UdpSocket>,
+    configuration: RobotConfigurationFile,
+    network_data: Arc<RwLock<SharedNetworkData>>,
+) {
+    network_data.write().await.last_requested_configuration = Some(configuration.clone());
+
+    send_command(
+        socket,
+        CommandPacketData::from_command_and_data(
+            REQUEST_CONFIGURATION,
+            serde_json::to_string(&configuration).unwrap(),
+        ),
+        network_data,
+    )
+    .await;
 }
 
 /// Sends a command to the remote socket, setting its sequence
@@ -209,6 +231,7 @@ pub async fn start_network_thread(
         state: NetworkStatus::Establishing,
         unacknowledged_command_packets: Vec::new(),
         last_received: None,
+        last_requested_configuration: None, 
     }));
 
     let debug_copy = debug.clone();
@@ -838,8 +861,6 @@ impl NetworkHandler {
                 if let Some(types) = &write_lock.configuration_types {
                     let xml_configuration = try_parse_xml_document(packet.data, types).unwrap();
 
-                    log::info!("Robot config: {:?}", types);
-
                     let re_written = write_xml_document(&xml_configuration).unwrap();
 
                     let _ =
@@ -847,7 +868,17 @@ impl NetworkHandler {
 
                     log::info!("Re-written to xml: {}", re_written);
 
-                    write_lock.active_configuration_data = Some(xml_configuration);
+                    if let Some(config) = self
+                        .shared_data
+                        .read()
+                        .await
+                        .last_requested_configuration
+                        .clone()
+                    {
+                        write_lock.wanted_configuration = Some(config);
+                    }
+
+                    write_lock.wanted_configuration_data = Some(xml_configuration);
                 } else {
                     log::warn!("We haven't received our configuration types yet..");
                 }

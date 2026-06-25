@@ -225,6 +225,8 @@ pub enum OpModeSource {
 /// Data about a particular configuration (file)
 pub struct RobotConfigurationFile {
     /// Unsure what this means
+    ///
+    /// -> speculation: true if we have unsaved changes?
     pub is_dirty: bool,
 
     /// Where the configuration is stored

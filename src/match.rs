@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
-use tokio::{process::Command, task::JoinHandle};
+use tokio::{process::Command, sync::broadcast::error::RecvError::Closed, task::JoinHandle};
 
 /// Used for match timers and sfx
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -225,6 +225,10 @@ impl MatchSFXHandler {
                 },
                 Err(e) => {
                     log::warn!("Failed to receive new match! {:?}", e);
+
+                    if e == Closed {
+                        break;
+                    }
                 }
             }
         }

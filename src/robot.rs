@@ -154,4 +154,10 @@ pub struct RobotConfigurationData {
 
     /// The parsed active configuration, if we've received it
     pub active_configuration_data: Option<crate::ftc_proto::hardware::robot::Robot>,
+
+    /// Which configuration wanted_configuration_data is
+    pub wanted_configuration: Option<RobotConfigurationFile>,
+
+    /// Data of the last configuration we requested
+    pub wanted_configuration_data: Option<crate::ftc_proto::hardware::robot::Robot>,
 }

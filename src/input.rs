@@ -10,7 +10,7 @@ use crate::{
     App,
     app::{
         ACTIVE_OPMODE_BLOCK_ID, AUTO_BLOCK_ID, AppMode, GAMEPADS_BLOCK_ID, TELEOP_BLOCK_ID,
-        get_timestamp_millis, get_timestamp_nanos,
+        get_timestamp_millis,
     },
     ftc_proto::{
         command_packet::{CommandPacketData, OPMODE_STOP, REQUEST_CONFIGURATIONS},
@@ -42,6 +42,43 @@ impl App {
         }
     }
 
+    /// Handles inputs when we have a popup
+    pub async fn handle_popup_key_events(&mut self, key: KeyEvent) -> bool {
+        if let Some(popup) = self.active_popup.clone() {
+            match (key.modifiers, key.code) {
+                // Submit
+                (_, KeyCode::Enter) | (_, KeyCode::Esc) => {
+                    popup.lock().await.submit(self);
+                    self.active_popup = None;
+                }
+
+                // Move selected option forwards and backwards
+                (_, KeyCode::Tab) | (_, KeyCode::Right) | (_, KeyCode::Char('l')) => {
+                    popup.lock().await.select_next_option();
+                }
+
+                (_, KeyCode::BackTab) | (_, KeyCode::Left) | (_, KeyCode::Char('h')) => {
+                    popup.lock().await.select_previous_option();
+                }
+
+                // Scrolls up and down
+                (_, KeyCode::Up) | (_, KeyCode::Char('k')) => {
+                    popup.lock().await.scroll_up();
+                }
+
+                (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
+                    popup.lock().await.scroll_down();
+                }
+
+                _ => {}
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
     /// Handles the key events and updates the state of [`App`] when in normal mode.
     ///
     /// Normal mode is also the only which supports interacting with popups.
@@ -63,17 +100,11 @@ impl App {
                 self.mode = AppMode::InsertCommand(String::with_capacity(32));
             }
 
-            // Open quickmenu
-            (_, KeyCode::Char('q')) => {
-                let mut state = ListState::default();
-
-                // Bandaid fix for having to press twice to move down for the first time
-                state.select_next();
-
-                self.quickmenu_state = Some(state);
-            }
-
             _ => {}
+        }
+
+        if self.handle_popup_key_events(key).await {
+            return;
         }
 
         // Quickmenu key handlers
@@ -135,39 +166,6 @@ impl App {
 
                 (_, KeyCode::Tab) | (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
                     quickmenu_state.select_next();
-                }
-
-                _ => {}
-            }
-
-            return;
-        }
-
-        // Popup key handlers
-        if let Some(popup) = self.active_popup.clone() {
-            match (key.modifiers, key.code) {
-                // Submit
-                (_, KeyCode::Enter) | (_, KeyCode::Esc) => {
-                    popup.lock().await.submit(self);
-                    self.active_popup = None;
-                }
-
-                // Move selected option forwards and backwards
-                (_, KeyCode::Tab) | (_, KeyCode::Right) | (_, KeyCode::Char('l')) => {
-                    popup.lock().await.select_next_option();
-                }
-
-                (_, KeyCode::BackTab) | (_, KeyCode::Left) | (_, KeyCode::Char('h')) => {
-                    popup.lock().await.select_previous_option();
-                }
-
-                // Scrolls up and down
-                (_, KeyCode::Up) | (_, KeyCode::Char('k')) => {
-                    popup.lock().await.scroll_up();
-                }
-
-                (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
-                    popup.lock().await.scroll_down();
                 }
 
                 _ => {}
@@ -271,6 +269,16 @@ impl App {
                 }
                 _ => {}
             },
+
+            // Open quickmenu
+            (_, KeyCode::Char('q')) | (_, KeyCode::Esc) => {
+                let mut state = ListState::default();
+
+                // Bandaid fix for having to press twice to move down for the first time
+                state.select_next();
+
+                self.quickmenu_state = Some(state);
+            }
             _ => {}
         }
     }

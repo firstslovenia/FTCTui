@@ -4,10 +4,16 @@ use app::App;
 use clap::Parser;
 use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger};
 
-use crate::ftc_proto::hardware::document::{try_parse_xml_document, write_xml_document};
+use crate::{
+    fs::{
+        create_folder_if_not_exists, get_config_folder, get_configurations_folder,
+    },
+    ftc_proto::hardware::document::{try_parse_xml_document, write_xml_document},
+};
 
 pub mod app;
 pub mod command;
+pub mod fs;
 pub mod ftc_dashboard;
 pub mod ftc_proto;
 pub mod gamepad_map;
@@ -149,6 +155,9 @@ async fn main() -> color_eyre::Result<()> {
            }
        }
     }
+
+    create_folder_if_not_exists(&get_config_folder());
+    create_folder_if_not_exists(&get_configurations_folder());
 
     let app = App::new(args).await;
 

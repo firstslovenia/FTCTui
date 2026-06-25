@@ -1,5 +1,8 @@
 use ratatui::{
-    Frame, layout::{Constraint, Layout}, style::Stylize, widgets::{Block, Clear, ListState, Padding, Paragraph},
+    Frame,
+    layout::{Constraint, Layout},
+    style::Stylize,
+    widgets::{Block, Clear, ListState, Padding, Paragraph},
 };
 use styles::{TEXT_COLOR, block_style, selected_block_style};
 
@@ -160,13 +163,13 @@ impl App {
 
         match &self.mode {
             AppMode::ConfigureHardware(_) => {
-                //
+                HardwareConfigurationUI::render(self, frame);
             }
             _ => {}
         }
 
-        self.render_popup_if_any(frame);
         self.render_quickmenu_if_open(frame);
+        self.render_popup_if_any(frame);
 
         // Render the vim-like command thingy
         match &self.mode {
@@ -176,9 +179,6 @@ impl App {
                     Paragraph::new(format!(":{}█", current_command)).fg(TEXT_COLOR);
 
                 frame.render_widget(command_paragraph, main_layout[2]);
-            }
-            AppMode::ConfigureHardware(_) => {
-                HardwareConfigurationUI::render(self, frame);
             }
             _ => {}
         }

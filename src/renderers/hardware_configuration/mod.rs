@@ -1,16 +1,24 @@
+use std::sync::Arc;
+
+use async_lock::Mutex;
 use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
     layout::{Constraint, Flex, Layout},
-    style::{Style, Stylize},
+    style::Stylize,
     text::Span,
-    widgets::{Block, Clear, List, ListItem, ListState, Padding},
+    widgets::{Block, Clear, List, ListItem, ListState, Padding, Paragraph},
 };
 
 use crate::{
-    app::{App, AppMode, get_timestamp_nanos},
-    ftc_proto::command_packet::{CommandPacketData, REQUEST_CONFIGURATION, RobotConfigurationFile},
-    network::send_command,
+    app::{App, AppMode},
+    fs::get_configurations_folder,
+    ftc_proto::{
+        command_packet::RobotConfigurationFile,
+        hardware::document::write_xml_document,
+    },
+    network::{request_configuration},
+    popup::InfoPopup,
     renderers::{
         create_list_state,
         hardware_configuration::{
@@ -19,7 +27,7 @@ use crate::{
             in_menu::InMenuData,
         },
         styles::{
-            MUTED_TEXT_COLOR, SELECTED_BACKGROUND, SUCCESS_COLOR, TEXT_COLOR, block_style,
+            SELECTED_BACKGROUND, SUCCESS_COLOR, block_style,
             muted_text_style, text_style,
         },
     },
@@ -138,10 +146,7 @@ impl HardwareConfigurationUI {
             let list_state = state.list_state;
             let mut items: Vec<ListItem> = Vec::new();
 
-            items.push(ListItem::new(Span::styled(
-                state.config.name,
-                text_style(),
-            )));
+            items.push(ListItem::new(Span::styled(state.config.name, text_style())));
             items.push(ListItem::new(Span::styled("Back", muted_text_style())));
             items.push(ListItem::new(Span::styled("Save", muted_text_style())));
             items.push(ListItem::new(Span::styled("Edit", muted_text_style())));
@@ -231,6 +236,10 @@ impl HardwareConfigurationUI {
 
     /// Handles inputs when in the UI
     pub async fn on_key_event(app: &mut App, key: KeyEvent) {
+        if app.handle_popup_key_events(key).await {
+            return;
+        }
+
         let AppMode::ConfigureHardware(ui) = &mut app.mode else {
             return;
         };
@@ -287,13 +296,9 @@ impl HardwareConfigurationUI {
                     if let Some(configurations) = &hardware.configurations {
                         let configuration = configurations[configuration_index].clone();
                         ui.state = HardwareConfigurationUIState::new_in_menu(configuration.clone());
-
-                        send_command(
+                        request_configuration(
                             &app.socket,
-                            CommandPacketData::from_command_and_data(
-                                REQUEST_CONFIGURATION,
-                                configuration.name,
-                            ),
+                            configuration,
                             app.shared_network_data.clone(),
                         )
                         .await;
@@ -334,7 +339,55 @@ impl HardwareConfigurationUI {
                         3 => {}
 
                         // Export to file
-                        4 => {}
+                        4 => {
+                            let mut popup_text = String::new();
+
+                            if let Some(last_fetched_config) = &hardware.wanted_configuration {
+                                if last_fetched_config.name == state.config.name {
+                                    if let Some(data) = &hardware.wanted_configuration_data {
+                                        let Some(as_string) = write_xml_document(data) else {
+                                            app.active_popup =
+                                                Some(Arc::new(Mutex::new(InfoPopup {
+                                                    scroll: 0,
+                                                    text: Paragraph::new(
+                                                        "Failed to serialize configuration!",
+                                                    ),
+                                                })));
+                                            return;
+                                        };
+
+                                        let filename = format!("{}.xml", state.config.name);
+
+                                        match std::fs::write(
+                                            get_configurations_folder().join(filename),
+                                            &as_string,
+                                        ) {
+                                            Ok(_) => {
+                                                popup_text = "Successfully exported!".to_string();
+                                            }
+                                            Err(e) => {
+                                                popup_text =
+                                                    format!("Failed to write to file! ({})", e);
+                                            }
+                                        }
+                                    } else {
+                                        popup_text =
+                                            "Failed to fetch this configuration, sorry! (error 2)"
+                                                .to_string();
+                                    }
+                                } else {
+                                    popup_text =
+                                        "Failed to fetch this configuration, sorry! (error 1)"
+                                            .to_string();
+                                }
+                            }
+
+                            app.active_popup = Some(Arc::new(Mutex::new(InfoPopup {
+                                scroll: 0,
+                                text: Paragraph::new(popup_text),
+                            })));
+                            return;
+                        }
 
                         _ => {}
                     }
