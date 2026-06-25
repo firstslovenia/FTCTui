@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::app::get_timestamp_nanos;
+
 use super::{
     hardware::device::HardwareDeviceType,
     traits::{Readable, Writeable, read_string_from},
@@ -19,6 +21,21 @@ pub struct CommandPacketData {
 
     pub command: String,
     pub data: String,
+}
+
+impl CommandPacketData {
+    pub fn from_command(cmd: &str) -> CommandPacketData {
+        Self::from_command_and_data(cmd, String::new())
+    }
+
+    pub fn from_command_and_data(cmd: &str, data: String) -> CommandPacketData {
+        CommandPacketData {
+            timestamp: get_timestamp_nanos(),
+            command: cmd.to_string(),
+            data: data,
+            acknowledged: false,
+        }
+    }
 }
 
 impl Writeable for CommandPacketData {

@@ -14,10 +14,18 @@ use tokio::net::UdpSocket;
 use async_lock::{Mutex, RwLock};
 
 use crate::{
-    Args, ftc_proto::command_packet::{
+    Args,
+    ftc_proto::command_packet::{
         CommandPacketData, INIT_OPMODE, OPMODE_STOP, OpModeData, OpModeFlavor, RESTART_ROBOT,
         RUN_OPMODE,
-    }, gamepad_map::{self, AsyncGilrs, REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX}, input::Gamepad, r#match::{Match, MatchSFXHandler}, network::{NetworkStatus, SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command}, popup::{InfoPopup, Popup}, renderers::hardware_configuration::HardwareConfigurationUI, robot::Robot
+    },
+    gamepad_map::{self, AsyncGilrs, REV_CONTROLLER_CUSTOM_SDL_MAPPING_LINUX},
+    input::Gamepad,
+    r#match::{Match, MatchSFXHandler},
+    network::{NetworkStatus, SharedNetworkData, TELEMETRY_LOG_FILENAME, send_command},
+    popup::{InfoPopup, Popup},
+    renderers::hardware_configuration::HardwareConfigurationUI,
+    robot::Robot,
 };
 
 lazy_static! {
@@ -105,7 +113,6 @@ impl App {
         let (popup_sender, popup_receiver) = async_channel::bounded(8);
 
         let (network_debug_data, socket) = crate::network::start_network_thread(
-            "192.168.43.1:20884",
             robot.clone(),
             gamepad_one.clone(),
             gamepad_two.clone(),
@@ -279,12 +286,7 @@ impl App {
     pub async fn start_opmode(&self, opmode: String) {
         send_command(
             &self.socket,
-            CommandPacketData {
-                acknowledged: false,
-                command: RUN_OPMODE.to_string(),
-                data: opmode,
-                timestamp: get_timestamp_nanos(),
-            },
+            CommandPacketData::from_command_and_data(RUN_OPMODE, opmode),
             self.shared_network_data.clone(),
         )
         .await;
@@ -294,12 +296,7 @@ impl App {
     pub async fn init_opmode(&self, opmode: String) {
         send_command(
             &self.socket,
-            CommandPacketData {
-                acknowledged: false,
-                command: INIT_OPMODE.to_string(),
-                data: opmode,
-                timestamp: get_timestamp_nanos(),
-            },
+            CommandPacketData::from_command_and_data(INIT_OPMODE, opmode),
             self.shared_network_data.clone(),
         )
         .await;
@@ -309,12 +306,7 @@ impl App {
     pub async fn stop_opmode(&self) {
         send_command(
             &self.socket,
-            CommandPacketData {
-                acknowledged: false,
-                command: INIT_OPMODE.to_string(),
-                data: OPMODE_STOP.to_string(),
-                timestamp: get_timestamp_nanos(),
-            },
+            CommandPacketData::from_command_and_data(INIT_OPMODE, OPMODE_STOP.to_string()),
             self.shared_network_data.clone(),
         )
         .await;
@@ -324,12 +316,7 @@ impl App {
     pub async fn restart_robot(&mut self) {
         send_command(
             &self.socket,
-            CommandPacketData {
-                acknowledged: false,
-                command: RESTART_ROBOT.to_string(),
-                timestamp: get_timestamp_nanos(),
-                data: String::new(),
-            },
+            CommandPacketData::from_command(RESTART_ROBOT),
             self.shared_network_data.clone(),
         )
         .await;

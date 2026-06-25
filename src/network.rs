@@ -45,6 +45,9 @@ use tokio::net::UdpSocket;
 
 use async_lock::{Mutex, RwLock};
 
+pub const LOCAL_BIND_ADDR: &str = "0.0.0.0:20884";
+pub const REMOTE_ADDR: &str = "192.168.43.1:20884";
+
 /// Structure of the telemetry log entries
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TelemetryLogEntry {
@@ -174,20 +177,19 @@ pub struct NetworkHandler {
 
 /// Starts the network thread, returning a handle to read debug data and a reference to the socket
 pub async fn start_network_thread(
-    remote_addr: &str,
     robot: Arc<RwLock<Robot>>,
     gamepad_one: Arc<async_lock::RwLock<Option<Gamepad>>>,
     gamepad_two: Arc<async_lock::RwLock<Option<Gamepad>>>,
     popup_producer: async_channel::Sender<Arc<Mutex<dyn Popup>>>,
     log_telemetry: bool,
 ) -> (Arc<RwLock<SharedNetworkData>>, Arc<UdpSocket>) {
-    log::debug!("Trying to connect to {}..", remote_addr);
+    log::debug!("Trying to connect to {}..", REMOTE_ADDR);
 
-    let sock = UdpSocket::bind("0.0.0.0:20884")
+    let sock = UdpSocket::bind(LOCAL_BIND_ADDR)
         .await
         .expect("Failed to bind to port 20884");
 
-    match sock.connect(remote_addr).await {
+    match sock.connect(REMOTE_ADDR).await {
         Ok(_) => {}
         Err(e) => {
             log::error!("Failed to connect to robot: {}", e);
@@ -254,24 +256,14 @@ impl NetworkHandler {
         // that yet
         send_command(
             &self.socket,
-            CommandPacketData {
-                data: String::new(),
-                command: REQUEST_OP_MODES.to_string(),
-                timestamp: get_timestamp_nanos(),
-                acknowledged: false,
-            },
+            CommandPacketData::from_command(REQUEST_OP_MODES),
             self.shared_data.clone(),
         )
         .await;
 
         send_command(
             &self.socket,
-            CommandPacketData {
-                data: String::new(),
-                command: REQUEST_ACTIVE_CONFIGURATION.to_string(),
-                timestamp: get_timestamp_nanos(),
-                acknowledged: false,
-            },
+            CommandPacketData::from_command(REQUEST_ACTIVE_CONFIGURATION),
             self.shared_data.clone(),
         )
         .await;
@@ -279,12 +271,7 @@ impl NetworkHandler {
         // If we have a running opmode, end it so we don't bug out
         send_command(
             &self.socket,
-            CommandPacketData {
-                acknowledged: false,
-                command: INIT_OPMODE.to_string(),
-                data: OPMODE_STOP.to_string(),
-                timestamp: get_timestamp_nanos(),
-            },
+            CommandPacketData::from_command_and_data(INIT_OPMODE, OPMODE_STOP.to_string()),
             self.shared_data.clone(),
         )
         .await;
@@ -324,49 +311,49 @@ impl NetworkHandler {
                         match Packet::read_from(&mut vec_buffer) {
                             Some(mut packet) => {
                                 match packet.packet_type {
-                                             PacketType::Time => {
-                                                let Some(_data) = TimePacketData::read_from(&mut packet.data) else {
-                                                    log::warn!("Failed to deserialize time packet: {:?}", recv_buffer[0..num_bytes].to_vec());
-                                                                    continue;
-                                                };
+                                     PacketType::Time => {
+                                        let Some(_data) = TimePacketData::read_from(&mut packet.data) else {
+                                            log::warn!("Failed to deserialize time packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                                                            continue;
+                                        };
 
-                                                log::debug!("Received time packet..");
+                                        log::debug!("Received time packet..");
 
-                                                // This if fake!
-                                                //self.robot.write().await.active_opmode_state = Some(data.robot_op_mode_state);
-                                             }
-                                             PacketType::Gamepad => {
-                                                log::warn!("Received gamepad packet from the robot, the server is likely incredibly drunk");
-                                                              continue;
-                                             }
-                                             PacketType::Heartbeat => {
-                                                let Some(data) = HeartbeatPacketData::read_from(&mut packet.data) else {
-                                                    log::warn!("Failed to deserialize heartbeat packet: {:?}", recv_buffer[0..num_bytes].to_vec());
-                                                                    continue;
-                                                };
+                                        // This if fake!
+                                        //self.robot.write().await.active_opmode_state = Some(data.robot_op_mode_state);
+                                     }
+                                     PacketType::Gamepad => {
+                                        log::warn!("Received gamepad packet from the robot, the server is likely incredibly drunk");
+                                                      continue;
+                                     }
+                                     PacketType::Heartbeat => {
+                                        let Some(data) = HeartbeatPacketData::read_from(&mut packet.data) else {
+                                            log::warn!("Failed to deserialize heartbeat packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                                                            continue;
+                                        };
 
-                                                log::debug!("Received heartbeat packet (sequence number {}), robot is running on sdk from {}/{} on {}.{}", data.sequence_number, data.sdk_build_month, data.sdk_build_year, data.sdk_major_version, data.sdk_minor_version);
-                                             }
-                                             PacketType::Command => {
-                                                let Some(data) = CommandPacketData::read_from(&mut packet.data) else {
-                                                                    log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
-                                                                    continue;
-                                                };
+                                        log::debug!("Received heartbeat packet (sequence number {}), robot is running on sdk from {}/{} on {}.{}", data.sequence_number, data.sdk_build_month, data.sdk_build_year, data.sdk_major_version, data.sdk_minor_version);
+                                     }
+                                     PacketType::Command => {
+                                        let Some(data) = CommandPacketData::read_from(&mut packet.data) else {
+                                                            log::warn!("Failed to deserialize command packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                                                            continue;
+                                        };
 
-                                                log::debug!("Received command packet ({:?})", data);
+                                        log::debug!("Received command packet ({:?})", data);
 
-                                                                self.handle_command_packet(data, packet.sequence_number.unwrap()).await;
-                                             }
-                                             PacketType::Telemetry => {
-                                                 let Some(data) = TelemetryPacketData::read_from(&mut packet.data) else {
-                                                    log::warn!("Failed to deserialize telemetry packet: {:?}", recv_buffer[0..num_bytes].to_vec());
-                                                                    continue;
-                                                };
+                                                        self.handle_command_packet(data, packet.sequence_number.unwrap()).await;
+                                     }
+                                     PacketType::Telemetry => {
+                                         let Some(data) = TelemetryPacketData::read_from(&mut packet.data) else {
+                                            log::warn!("Failed to deserialize telemetry packet: {:?}", recv_buffer[0..num_bytes].to_vec());
+                                                            continue;
+                                        };
 
-                                                log::debug!("Received telemetry packet.. ({:?})", data);
+                                        log::debug!("Received telemetry packet.. ({:?})", data);
 
-                                                                self.handle_telemetry_packet(data).await;
-                                             }
+                                                        self.handle_telemetry_packet(data).await;
+                                     }
                                 }
                             }
                             None => {
@@ -819,12 +806,10 @@ impl NetworkHandler {
                         // Ask to receive it properly
                         send_command(
                             &self.socket,
-                            CommandPacketData {
-                                acknowledged: false,
-                                command: REQUEST_CONFIGURATION.to_string(),
-                                data: packet.data.to_string(),
-                                timestamp: get_timestamp_nanos(),
-                            },
+                            CommandPacketData::from_command_and_data(
+                                REQUEST_CONFIGURATION,
+                                packet.data.to_string(),
+                            ),
                             self.shared_data.clone(),
                         )
                         .await;

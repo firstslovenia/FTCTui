@@ -104,12 +104,7 @@ impl App {
 
                             send_command(
                                 &self.socket,
-                                CommandPacketData {
-                                    acknowledged: false,
-                                    command: REQUEST_CONFIGURATIONS.to_string(),
-                                    timestamp: get_timestamp_nanos(),
-                                    data: String::new(),
-                                },
+                                CommandPacketData::from_command(REQUEST_CONFIGURATIONS),
                                 self.shared_network_data.clone(),
                             )
                             .await;

@@ -272,12 +272,10 @@ impl HardwareConfigurationUI {
 
                         send_command(
                             &app.socket,
-                            CommandPacketData {
-                                acknowledged: false,
-                                command: REQUEST_CONFIGURATION.to_string(),
-                                data: configuration.name,
-                                timestamp: get_timestamp_nanos(),
-                            },
+                            CommandPacketData::from_command_and_data(
+                                REQUEST_CONFIGURATION,
+                                configuration.name,
+                            ),
                             app.shared_network_data.clone(),
                         )
                         .await;
